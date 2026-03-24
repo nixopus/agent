@@ -1,0 +1,44 @@
+# Environment files — secrets must never be baked into the image
+.env
+.env.*
+!.env.sample
+
+# Dependencies — reinstalled during build
+node_modules
+
+# Build artifacts
+dist
+.mastra
+*.db
+*.db-*
+
+# Documentation (but keep skills)
+docs/
+*.md
+!skills/**/*.md
+
+# Development tooling
+.vscode/
+.idea/
+.cursor/
+
+# Git
+.git
+.gitignore
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+output.txt
+
+# Test fixtures
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Scripts (dev-only)
+scripts/dev.js

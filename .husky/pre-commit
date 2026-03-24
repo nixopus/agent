@@ -1,0 +1,13 @@
+echo "Running build verification..."
+if ! npm run build; then
+  echo "ERROR: Build failed"
+  exit 1
+fi
+echo "Build verification passed"
+
+echo "Running tests..."
+if ! npm test; then
+  echo "ERROR: Tests failed"
+  exit 1
+fi
+echo "Tests passed"
