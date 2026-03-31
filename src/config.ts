@@ -26,9 +26,9 @@ export const config = {
   dashboardUrl: process.env.DASHBOARD_URL || '',
 
   agentModel: process.env.AGENT_MODEL
-    || (process.env.OPENROUTER_API_KEY ? 'openrouter/anthropic/claude-sonnet-4' : 'ollama/llama3.2'),
+    || (process.env.OPENROUTER_API_KEY ? 'openrouter/anthropic/claude-sonnet-4' : 'ollama/ollama/llama3.2'),
   agentLightModel: process.env.AGENT_LIGHT_MODEL
-    || (process.env.OPENROUTER_API_KEY ? 'openrouter/openai/gpt-4o-mini' : 'ollama/llama3.2:3b'),
+    || (process.env.OPENROUTER_API_KEY ? 'openrouter/openai/gpt-4o-mini' : 'ollama/ollama/llama3.2:3b'),
   agentMaxOutputTokens: parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS || '4000', 10),
   agentMaxSteps: parseInt(process.env.AGENT_MAX_STEPS || '15', 10),
 
@@ -56,7 +56,7 @@ export const config = {
     messageTokens: parseInt(process.env.OM_MESSAGE_TOKENS || '30000', 10),
     observationTokens: parseInt(process.env.OM_OBSERVATION_TOKENS || '40000', 10),
     model: process.env.OM_MODEL
-      || (process.env.OPENROUTER_API_KEY ? 'openrouter/google/gemini-2.5-flash' : 'ollama/llama3.2'),
+      || (process.env.OPENROUTER_API_KEY ? 'openrouter/google/gemini-2.5-flash' : 'ollama/ollama/llama3.2'),
   },
 
   s3: {
