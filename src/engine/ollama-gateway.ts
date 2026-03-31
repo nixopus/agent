@@ -6,7 +6,7 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:11434/api';
 
 /**
  * Gateway for local Ollama instances.
- * Resolves model strings like "ollama/llama3.2" using the ollama-ai-provider-v2 SDK,
+ * Resolves model strings like "ollama/ollama/llama3.2" using the ollama-ai-provider-v2 SDK,
  * pointing at OLLAMA_BASE_URL (defaults to localhost:11434).
  */
 export class OllamaLocalGateway extends MastraModelGateway {
