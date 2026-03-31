@@ -2,8 +2,6 @@ import { Agent } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
 import { ToolSearchProcessor } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
-import { PostgresStore } from '@mastra/pg';
-import { getMemoryPool } from '../../db/pool';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, openrouterProvider, agentDefaults } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
@@ -46,13 +44,7 @@ const diagnosticToolSearch = new ToolSearchProcessor({
   search: { topK: 5, minScore: 0.1 },
 });
 
-export const diagnosticMemoryStore = new PostgresStore({
-  id: 'diagnostic-agent-memory',
-  pool: getMemoryPool(config.databaseUrl),
-});
-
 const diagnosticMemory = new Memory({
-  storage: diagnosticMemoryStore,
   options: {
     lastMessages: 12,
     semanticRecall: false,

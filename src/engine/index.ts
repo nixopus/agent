@@ -38,14 +38,14 @@ import { getPool } from '../db/pool';
 import { config } from '../config';
 import { initCacheStoreFactory, shutdownPubSubBus } from '../cache';
 
-import { deployAgent, deployMemoryStore } from './agents/deploy-agent';
-import { diagnosticAgent, diagnosticMemoryStore } from './agents/diagnostic-agent';
+import { deployAgent } from './agents/deploy-agent';
+import { diagnosticAgent } from './agents/diagnostic-agent';
 import { machineAgent } from './agents/machine-agent';
 import { preDeployAgent } from './agents/pre-deploy-agent';
 import { notificationAgent } from './agents/notification-agent';
 import { infrastructureAgent } from './agents/infrastructure-agent';
 import { githubAgent } from './agents/github-agent';
-import { incidentAgent, incidentMemoryStore } from './agents/incident-agent';
+import { incidentAgent } from './agents/incident-agent';
 
 import { OllamaLocalGateway } from './ollama-gateway';
 import { creditRoutes } from '../features/credits/routes';
@@ -142,13 +142,7 @@ export const mastra = new Mastra({
 
 (async () => {
   try {
-    // Fully serialize — each PostgresStore.init() internally runs CREATE TYPE
-    // DDL that lacks IF NOT EXISTS, so any concurrent init pair races on
-    // pg_type_typname_nsp_index.
     await postgresStore.init();
-    await deployMemoryStore.init();
-    await diagnosticMemoryStore.init();
-    await incidentMemoryStore.init();
     logger.info('Storage pre-initialized');
   } catch (err) {
     logger.error({ err }, 'Storage initialization failed');

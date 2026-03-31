@@ -1,8 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
 import { Memory } from '@mastra/memory';
-import { PostgresStore } from '@mastra/pg';
-import { getMemoryPool } from '../../db/pool';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, agentDefaults } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
@@ -50,13 +48,7 @@ Your prompt contains the full incident context formatted by the event pipeline. 
 ## Memory
 Use recalled context from past incidents for this thread when helpful. Prefer continuity across steps in the same incident.`;
 
-export const incidentMemoryStore = new PostgresStore({
-  id: 'incident-agent-memory',
-  pool: getMemoryPool(config.databaseUrl),
-});
-
 const incidentMemory = new Memory({
-  storage: incidentMemoryStore,
   options: {
     lastMessages: 12,
     semanticRecall: false,
