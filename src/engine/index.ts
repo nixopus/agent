@@ -142,14 +142,13 @@ export const mastra = new Mastra({
 
 (async () => {
   try {
-    // Serialize init calls — @mastra/pg runs CREATE TYPE DDL that lacks
-    // IF NOT EXISTS, so concurrent inits race on pg_type_typname_nsp_index.
+    // Fully serialize — each PostgresStore.init() internally runs CREATE TYPE
+    // DDL that lacks IF NOT EXISTS, so any concurrent init pair races on
+    // pg_type_typname_nsp_index.
     await postgresStore.init();
-    await Promise.all([
-      deployMemoryStore.init(),
-      diagnosticMemoryStore.init(),
-      incidentMemoryStore.init(),
-    ]);
+    await deployMemoryStore.init();
+    await diagnosticMemoryStore.init();
+    await incidentMemoryStore.init();
     logger.info('Storage pre-initialized');
   } catch (err) {
     logger.error({ err }, 'Storage initialization failed');
