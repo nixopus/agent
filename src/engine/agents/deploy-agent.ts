@@ -2,8 +2,6 @@ import { Agent } from '@mastra/core/agent';
 import type { MastraDBMessage } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
 import { Memory } from '@mastra/memory';
-import { PostgresStore } from '@mastra/pg';
-import { getMemoryPool } from '../../db/pool';
 import { config } from '../../config';
 import { createLogger } from '../../logger';
 import { applicationTools } from '../tools/api/application-tools';
@@ -45,13 +43,7 @@ import { createRequestWorkspace } from '../workspace-factory';
 const logger = createLogger('deploy-agent');
 const deployStateProcessor = new DeployStateProcessor();
 
-export const deployMemoryStore = new PostgresStore({
-  id: 'deploy-agent-memory',
-  pool: getMemoryPool(config.databaseUrl),
-});
-
 const deployMemory = new Memory({
-  storage: deployMemoryStore,
   options: {
     lastMessages: 12,
     semanticRecall: false,
