@@ -1376,10 +1376,10 @@
   resolved "https://registry.npmjs.org/@msgpackr-extract/msgpackr-extract-darwin-arm64/-/msgpackr-extract-darwin-arm64-3.0.3.tgz"
   integrity sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw==
 
-"@nixopus/api-client@0.0.12":
-  version "0.0.12"
-  resolved "https://registry.npmjs.org/@nixopus/api-client/-/api-client-0.0.12.tgz"
-  integrity sha512-kPlBUh4O1dYXMObUL0MwqAo9nW2uqlULc76c8NvxbmH05Pxccye3m2LnrPcM+kl2yH9fcG3vDf/hpEQEW69bBQ==
+"@nixopus/api-client@^0.0.14":
+  version "0.0.14"
+  resolved "https://registry.npmjs.org/@nixopus/api-client/-/api-client-0.0.14.tgz"
+  integrity sha512-KRHPI9s9OlW2D/+1s07ycDrDjMPr8K8aIGp7CMh3pebS5PRnS/2bYMFuL/Ye63559LTIeHmZBNGq2zmDoD/gVA==
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"

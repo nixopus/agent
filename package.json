@@ -35,7 +35,7 @@
     "@mastra/observability": "^1.0.0",
     "@mastra/pg": "^1.0.0",
     "@mastra/s3": "^0.2.1",
-    "@nixopus/api-client": "0.0.12",
+    "@nixopus/api-client": "0.0.14",
     "@openrouter/ai-sdk-provider": "^2.3.0",
     "@toon-format/toon": "^2.1.0",
     "ai": "^6.0.97",

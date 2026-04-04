@@ -6,12 +6,18 @@ import {
   restartMachine,
   pauseMachine,
   resumeMachine,
+  getMachineMetrics,
+  getMachineMetricsSummary,
+  getMachineEvents,
   zGetMachineLifecycleStatusData,
   zGetMachineSystemStatsData,
   zExecuteACommandOnTheHostMachineData,
   zRestartMachineData,
   zPauseMachineData,
   zResumeMachineData,
+  zGetMachineMetricsData,
+  zGetMachineMetricsSummaryData,
+  zGetMachineEventsData,
 } from '@nixopus/api-client';
 import { defineToolGroup } from './tool-factory';
 import { getClient } from './shared';
@@ -197,6 +203,55 @@ const tools = defineToolGroup({
       }
     },
   },
+  getMachineMetrics: {
+    id: 'get_machine_metrics',
+    description:
+      'Get time-series machine metrics (CPU, memory, disk, network) for a given period. ' +
+      'Use for trend analysis and historical performance investigation. ' +
+      'Complements get_machine_stats (point-in-time snapshot) with historical data.',
+    schema: zGetMachineMetricsData,
+    sdkFn: getMachineMetrics,
+    params: 'query' as const,
+    execute: async (inputData: any, ctx: unknown) => {
+      try {
+        return await sdkCall(ctx, getMachineMetrics, { query: inputData });
+      } catch (err: unknown) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  },
+  getMachineMetricsSummary: {
+    id: 'get_machine_metrics_summary',
+    description:
+      'Get a summarized overview of machine metrics: averages, peaks, and trends. ' +
+      'Use for quick health assessments without processing raw time-series data.',
+    schema: zGetMachineMetricsSummaryData,
+    sdkFn: getMachineMetricsSummary,
+    params: 'query' as const,
+    execute: async (inputData: any, ctx: unknown) => {
+      try {
+        return await sdkCall(ctx, getMachineMetricsSummary, { query: inputData });
+      } catch (err: unknown) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  },
+  getMachineEvents: {
+    id: 'get_machine_events',
+    description:
+      'Get machine lifecycle events (restarts, pauses, failures, state transitions). ' +
+      'Use to investigate what happened to the machine over time, correlate with incidents.',
+    schema: zGetMachineEventsData,
+    sdkFn: getMachineEvents,
+    params: 'query' as const,
+    execute: async (inputData: any, ctx: unknown) => {
+      try {
+        return await sdkCall(ctx, getMachineEvents, { query: inputData });
+      } catch (err: unknown) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  },
 });
 
 export const getMachineStatsTool = tools.getMachineStats;
@@ -205,4 +260,7 @@ export const getMachineLifecycleStatusTool = tools.getMachineLifecycleStatus;
 export const restartMachineTool = tools.restartMachine;
 export const pauseMachineTool = tools.pauseMachine;
 export const resumeMachineTool = tools.resumeMachine;
+export const getMachineMetricsTool = tools.getMachineMetrics;
+export const getMachineMetricsSummaryTool = tools.getMachineMetricsSummary;
+export const getMachineEventsTool = tools.getMachineEvents;
 export const machineTools = tools;

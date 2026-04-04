@@ -7,9 +7,11 @@ export { fileTools, listFilesTool, createDirectoryTool, moveDirectoryTool, copyD
 export { healthcheckTools, createHealthCheckTool, getHealthCheckTool, updateHealthCheckTool, deleteHealthCheckTool, toggleHealthCheckTool, getHealthCheckResultsTool, getHealthCheckStatsTool } from './healthcheck-tools';
 export { extensionTools, listExtensionsTool, getExtensionTool, getExtensionByExtensionIdTool, getExtensionExecutionsTool, getExtensionCategoriesTool, getExtensionExecutionTool, getExtensionExecutionLogsTool, deleteExtensionTool, cancelExtensionExecutionTool, forkExtensionTool, runExtensionTool } from './extension-tools';
 export { notificationConfigTools, getNotificationPreferencesTool, updateNotificationPreferencesTool, getSmtpConfigTool, createSmtpConfigTool, updateSmtpConfigTool, deleteSmtpConfigTool, getWebhookNotificationTool, createWebhookNotificationTool, updateWebhookNotificationTool, deleteWebhookNotificationTool } from './notification-config-tools';
-export { systemTools, getServersTool, getServersSshStatusTool, getAuditLogsTool, getFeatureFlagsTool, checkFeatureFlagTool, updateFeatureFlagsTool, getSystemHealthTool, checkForUpdatesTool, triggerUpdateTool, sendWebhookTool } from './system-tools';
-export { machineTools, getMachineStatsTool, hostExecTool, getMachineLifecycleStatusTool, restartMachineTool, pauseMachineTool, resumeMachineTool } from './machine-tools';
+export { systemTools, getServersTool, getServersSshStatusTool, getAuditLogsTool, getFeatureFlagsTool, checkFeatureFlagTool, updateFeatureFlagsTool, getSystemHealthTool, checkForUpdatesTool, triggerUpdateTool, sendWebhookTool, getServerSshStatusTool, getApplicationServersTool, setApplicationServersTool, setServerAsOrgDefaultTool } from './system-tools';
+export { machineTools, getMachineStatsTool, hostExecTool, getMachineLifecycleStatusTool, restartMachineTool, pauseMachineTool, resumeMachineTool, getMachineMetricsTool, getMachineMetricsSummaryTool, getMachineEventsTool } from './machine-tools';
 export { notificationTools, sendSlackNotificationTool, sendDiscordNotificationTool, sendEmailNotificationTool, sendNotificationTool } from './notification-tools';
+export { backupTools, getBackupScheduleTool, updateBackupScheduleTool, listMachineBackupsTool, triggerMachineBackupTool } from './backup-tools';
+export { mcpServerTools, listMcpProviderCatalogTool, listOrgMcpServersTool, addMcpServerTool, updateMcpServerTool, deleteMcpServerTool, testMcpServerConnectionTool, discoverMcpToolsTool, listEnabledMcpServersTool } from './mcp-server-tools';
 export { resolveContextTool } from './context-tools';
 
 import { containerTools } from './container-tools';
@@ -24,6 +26,8 @@ import { notificationConfigTools } from './notification-config-tools';
 import { systemTools } from './system-tools';
 import { machineTools } from './machine-tools';
 import { notificationTools } from './notification-tools';
+import { backupTools } from './backup-tools';
+import { mcpServerTools } from './mcp-server-tools';
 import { resolveContextTool } from './context-tools';
 
 export const apiTools = {
@@ -40,4 +44,6 @@ export const apiTools = {
   ...systemTools,
   ...machineTools,
   ...notificationTools,
+  ...backupTools,
+  ...mcpServerTools,
 };

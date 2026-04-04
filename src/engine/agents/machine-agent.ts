@@ -3,6 +3,7 @@ import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, openrouterProvider, agentDefaults } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
 import { machineTools } from '../tools/api/machine-tools';
+import { backupTools } from '../tools/api/backup-tools';
 import { getServersTool, getServersSshStatusTool } from '../tools/api/system-tools';
 import { getDomainsTool } from '../tools/api/domain-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
@@ -14,6 +15,13 @@ const machineAgentTools = {
   restartMachine: machineTools.restartMachine,
   pauseMachine: machineTools.pauseMachine,
   resumeMachine: machineTools.resumeMachine,
+  getMachineMetrics: machineTools.getMachineMetrics,
+  getMachineMetricsSummary: machineTools.getMachineMetricsSummary,
+  getMachineEvents: machineTools.getMachineEvents,
+  getBackupSchedule: backupTools.getBackupSchedule,
+  listMachineBackups: backupTools.listMachineBackups,
+  triggerMachineBackup: backupTools.triggerMachineBackup,
+  updateBackupSchedule: backupTools.updateBackupSchedule,
   getServers: getServersTool,
   getServersSshStatus: getServersSshStatusTool,
   getDomains: getDomainsTool,
@@ -41,6 +49,19 @@ You can check and control the machine instance state:
 - resume_machine → resume a paused instance (requires user approval)
 
 Always check get_machine_lifecycle_status before performing restart/pause/resume.
+
+## Metrics & Events
+- get_machine_metrics → historical time-series metrics (CPU, memory, disk, network)
+- get_machine_metrics_summary → summarized averages, peaks, and trends
+- get_machine_events → lifecycle events (restarts, failures, state changes)
+
+Use metrics for trend analysis and incident correlation. Use get_machine_stats for a point-in-time snapshot.
+
+## Backups
+- get_backup_schedule → current backup schedule configuration
+- update_backup_schedule → modify backup frequency, retention, timing
+- list_machine_backups → list available backups with timestamps and status
+- trigger_machine_backup → create an immediate backup (requires approval)
 
 ## Diagnostic Layers (IN ORDER, stop on root cause)
 1. get_servers_ssh_status → reachable?
