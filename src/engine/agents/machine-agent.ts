@@ -31,7 +31,7 @@ const safeMachineAgentTools = guardToolsForSchemaCompat(machineAgentTools);
 export const machineAgent = new Agent({
   id: 'machine-agent',
   name: 'Machine Agent',
-  description: 'Diagnoses server-level issues: CPU, RAM, disk, Docker daemon, Caddy proxy, DNS, and network connectivity.',
+  description: 'Manages server-level operations: system health (CPU, RAM, disk), Docker daemon, Caddy proxy, DNS, network connectivity, and machine backups (list, schedule, trigger).',
   instructions: `Machine-level diagnostics and lifecycle management. No emojis. Plain text only.
 
 ## Skills
