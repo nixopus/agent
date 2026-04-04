@@ -3,6 +3,10 @@ import { z } from 'zod';
 import {
   listServers,
   getSshConnectionStatus,
+  getSshConnectionStatusForASpecificServer,
+  getApplicationServers,
+  setApplicationServers,
+  setServerAsOrgDefault,
   listAuditLogs,
   listFeatureFlags,
   checkIfFeatureIsEnabled,
@@ -12,6 +16,10 @@ import {
   performUpdate,
   handleGitHubWebhook,
   zGetSshConnectionStatusData,
+  zGetSshConnectionStatusForASpecificServerData,
+  zGetApplicationServersData,
+  zSetApplicationServersData,
+  zSetServerAsOrgDefaultData,
   zListAuditLogsData,
   zListFeatureFlagsData,
   zCheckIfFeatureIsEnabledData,
@@ -102,6 +110,34 @@ const factoryTools = defineToolGroup({
     schema: zHandleGitHubWebhookData,
     sdkFn: handleGitHubWebhook,
   },
+  getServerSshStatus: {
+    id: 'get_server_ssh_status',
+    description: 'Read-only. Check SSH connectivity status for a specific server by server_id.',
+    schema: zGetSshConnectionStatusForASpecificServerData,
+    sdkFn: getSshConnectionStatusForASpecificServer,
+    pathKeys: ['server_id'],
+  },
+  getApplicationServers: {
+    id: 'get_application_servers',
+    description: 'Read-only. Get the servers assigned to a specific application by application_id.',
+    schema: zGetApplicationServersData,
+    sdkFn: getApplicationServers,
+    pathKeys: ['application_id'],
+  },
+  setApplicationServers: {
+    id: 'set_application_servers',
+    description: 'Mutating. Assign servers to an application. Required: application_id and server_ids array.',
+    schema: zSetApplicationServersData,
+    sdkFn: setApplicationServers,
+    pathKeys: ['application_id'],
+  },
+  setServerAsOrgDefault: {
+    id: 'set_server_as_org_default',
+    description: 'Mutating. Set a server as the default for the organization. Required: server_id.',
+    schema: zSetServerAsOrgDefaultData,
+    sdkFn: setServerAsOrgDefault,
+    pathKeys: ['server_id'],
+  },
 });
 
 export const getServersSshStatusTool = factoryTools.getServersSshStatus;
@@ -113,6 +149,10 @@ export const getSystemHealthTool = factoryTools.getSystemHealth;
 export const checkForUpdatesTool = factoryTools.checkForUpdates;
 export const triggerUpdateTool = factoryTools.triggerUpdate;
 export const sendWebhookTool = factoryTools.sendWebhook;
+export const getServerSshStatusTool = factoryTools.getServerSshStatus;
+export const getApplicationServersTool = factoryTools.getApplicationServers;
+export const setApplicationServersTool = factoryTools.setApplicationServers;
+export const setServerAsOrgDefaultTool = factoryTools.setServerAsOrgDefault;
 
 export const systemTools = {
   getServers: getServersTool,
@@ -125,4 +165,8 @@ export const systemTools = {
   checkForUpdates: checkForUpdatesTool,
   triggerUpdate: triggerUpdateTool,
   sendWebhook: sendWebhookTool,
+  getServerSshStatus: getServerSshStatusTool,
+  getApplicationServers: getApplicationServersTool,
+  setApplicationServers: setApplicationServersTool,
+  setServerAsOrgDefault: setServerAsOrgDefaultTool,
 };
