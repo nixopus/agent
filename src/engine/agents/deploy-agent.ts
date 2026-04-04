@@ -7,6 +7,8 @@ import { createLogger } from '../../logger';
 import { applicationTools } from '../tools/api/application-tools';
 import { projectTools } from '../tools/api/project-tools';
 import { githubConnectorTools } from '../tools/api/github-connector-tools';
+import { getDomainsTool, generateRandomSubdomainTool, createDomainTool, updateDomainTool } from '../tools/api/domain-tools';
+import { addApplicationDomainTool } from '../tools/api/application-tools';
 import { codebaseTools } from '../tools/codebase/codebase-tools';
 import { resolveContextTool } from '../tools/api/context-tools';
 import { askUserTool } from '../tools/shared/ask-user-tool';
@@ -86,6 +88,11 @@ const rawDeployTools = {
   githubCreatePullRequest: githubTools.githubCreatePullRequest,
   resolveContext: resolveContextTool,
   askUser: askUserTool,
+  getDomains: getDomainsTool,
+  generateRandomSubdomain: generateRandomSubdomainTool,
+  addApplicationDomain: addApplicationDomainTool,
+  createDomain: createDomainTool,
+  updateDomain: updateDomainTool,
   ...nixopusDocsTools,
 };
 
