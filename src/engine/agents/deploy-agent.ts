@@ -26,6 +26,7 @@ import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
 import { withSourceGuard } from '../tools/shared/source-guard';
+import { ToolSearchProcessor } from '@mastra/core/processors';
 import {
   unicodeNormalizer,
   openrouterProvider,
@@ -61,41 +62,63 @@ const deployMemory = new Memory({
   },
 });
 
-const rawDeployTools = {
+export const rawDeployCoreTools = {
   getApplications: applicationTools.getApplications,
   getApplication: applicationTools.getApplication,
   getApplicationDeployments: applicationTools.getApplicationDeployments,
   getDeploymentById: applicationTools.getDeploymentById,
   getDeploymentLogs: applicationTools.getDeploymentLogs,
+  createProject: projectTools.createProject,
+  deployProject: projectTools.deployProject,
+  getGithubConnectors: githubConnectorTools.getGithubConnectors,
+  getGithubRepositories: githubConnectorTools.getGithubRepositories,
+  analyzeRepository: codebaseTools.analyzeRepository,
+  prepareCodebase: codebaseTools.prepareCodebase,
+  loadLocalWorkspace: codebaseTools.loadLocalWorkspace,
+  writeWorkspaceFiles: deployGenTools.writeWorkspaceFiles,
+  resolveContext: resolveContextTool,
+  askUser: askUserTool,
+  getDomains: getDomainsTool,
+  generateRandomSubdomain: generateRandomSubdomainTool,
+  addApplicationDomain: addApplicationDomainTool,
+};
+
+export const rawDeploySearchableTools = {
   updateApplication: applicationTools.updateApplication,
   updateApplicationLabels: applicationTools.updateApplicationLabels,
   restartDeployment: applicationTools.restartDeployment,
   rollbackDeployment: applicationTools.rollbackDeployment,
   redeployApplication: applicationTools.redeployApplication,
   recoverApplication: applicationTools.recoverApplication,
+  deleteApplication: applicationTools.deleteApplication,
   previewCompose: applicationTools.previewCompose,
   getComposeServices: applicationTools.getComposeServices,
-  deleteApplication: applicationTools.deleteApplication,
-  ...projectTools,
-  ...codebaseTools,
-  ...githubConnectorTools,
-  writeWorkspaceFiles: deployGenTools.writeWorkspaceFiles,
+  duplicateProject: projectTools.duplicateProject,
+  getProjectFamily: projectTools.getProjectFamily,
+  getEnvironmentsInFamily: projectTools.getEnvironmentsInFamily,
+  addProjectToFamily: projectTools.addProjectToFamily,
+  createGithubConnector: githubConnectorTools.createGithubConnector,
+  updateGithubConnector: githubConnectorTools.updateGithubConnector,
+  deleteGithubConnector: githubConnectorTools.deleteGithubConnector,
+  getGithubRepositoryBranches: githubConnectorTools.getGithubRepositoryBranches,
   githubGetRepoFile: githubTools.githubGetRepoFile,
   githubGetBranch: githubTools.githubGetBranch,
   githubCreateBranch: githubTools.githubCreateBranch,
   githubCreateOrUpdateFile: githubTools.githubCreateOrUpdateFile,
   githubCreatePullRequest: githubTools.githubCreatePullRequest,
-  resolveContext: resolveContextTool,
-  askUser: askUserTool,
-  getDomains: getDomainsTool,
-  generateRandomSubdomain: generateRandomSubdomainTool,
-  addApplicationDomain: addApplicationDomainTool,
   createDomain: createDomainTool,
   updateDomain: updateDomainTool,
-  ...nixopusDocsTools,
+  fetchNixopusDocsIndex: nixopusDocsTools.fetchNixopusDocsIndex,
+  fetchNixopusDocsPage: nixopusDocsTools.fetchNixopusDocsPage,
 };
 
-const deployTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeployTools))));
+const deployCoreTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeployCoreTools))));
+const deploySearchableTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeploySearchableTools))));
+
+const deployToolSearch = new ToolSearchProcessor({
+  tools: deploySearchableTools,
+  search: { topK: 6, minScore: 0.1 },
+});
 
 function hasToolInvocations(msg: MastraDBMessage): boolean {
   const parts = msg.content?.parts;
@@ -177,9 +200,9 @@ export const deployAgent = new Agent({
   name: 'Deploy Agent',
   instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
-  inputProcessors: [unicodeNormalizer, deployStateProcessor],
+  inputProcessors: [unicodeNormalizer, deployStateProcessor, deployToolSearch],
   workspace: createRequestWorkspace,
-  tools: deployTools,
+  tools: deployCoreTools,
   agents: {
     diagnostics: diagnosticAgent,
     machine: machineAgent,
@@ -191,7 +214,7 @@ export const deployAgent = new Agent({
   },
   memory: deployMemory as unknown as MastraMemory,
   defaultOptions: agentDefaults({
-    maxSteps: 40,
+    maxSteps: 100,
     modelSettings: { maxOutputTokens: 4000 },
     providerOptions: openrouterProvider(4000, { cache: true, reasoning: 'low' }),
     delegation: {

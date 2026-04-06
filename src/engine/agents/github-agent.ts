@@ -1,23 +1,56 @@
 import { Agent } from '@mastra/core/agent';
+import { ToolSearchProcessor } from '@mastra/core/processors';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, agentDefaults } from './shared';
 import { getGithubConnectorsTool, getGithubRepositoriesTool, getGithubRepositoryBranchesTool } from '../tools/api/github-connector-tools';
 import { githubTools } from '../tools/github/github-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 
-const ghTools = {
+export const rawGithubCoreTools = {
   getGithubConnectors: getGithubConnectorsTool,
   getGithubRepositories: getGithubRepositoriesTool,
   getGithubRepositoryBranches: getGithubRepositoryBranchesTool,
-  ...githubTools,
+  githubGetRepoFile: githubTools.githubGetRepoFile,
+  githubGetBranch: githubTools.githubGetBranch,
+  githubCreateBranch: githubTools.githubCreateBranch,
+  githubCreateOrUpdateFile: githubTools.githubCreateOrUpdateFile,
+  githubCreatePullRequest: githubTools.githubCreatePullRequest,
 };
-const safeGithubTools = guardToolsForSchemaCompat(ghTools);
+
+export const rawGithubSearchableTools = {
+  githubListPullRequests: githubTools.githubListPullRequests,
+  githubListIssues: githubTools.githubListIssues,
+  githubCommentOnPr: githubTools.githubCommentOnPr,
+  githubCommentOnIssue: githubTools.githubCommentOnIssue,
+  githubCreateIssue: githubTools.githubCreateIssue,
+  githubSetCommitStatus: githubTools.githubSetCommitStatus,
+  githubCreateDeploymentStatus: githubTools.githubCreateDeploymentStatus,
+  githubSearchRepoContent: githubTools.githubSearchRepoContent,
+  githubMergePullRequest: githubTools.githubMergePullRequest,
+};
+
+const githubCoreTools = guardToolsForSchemaCompat(rawGithubCoreTools);
+const githubSearchableTools = guardToolsForSchemaCompat(rawGithubSearchableTools);
+
+const githubToolSearch = new ToolSearchProcessor({
+  tools: githubSearchableTools,
+  search: { topK: 5, minScore: 0.1 },
+});
 
 export const githubAgent = new Agent({
   id: 'github-agent',
   name: 'GitHub Agent',
   description: 'Resolves GitHub repo IDs, manages PRs, branches, and file operations via GitHub App. Use for repo ID resolution and fix-via-PR workflows.',
   instructions: `Interact with GitHub repos, PRs, issues, and deployment statuses via the connected GitHub App. Resolve repo owner/name from context. The "repository" field for create_project must be the numeric GitHub repo ID — resolve via get_github_repositories.
+
+## Tool Loading
+Core tools are available immediately: get_github_connectors, get_github_repositories, get_github_repository_branches, github_get_repo_file, github_get_branch, github_create_branch, github_create_or_update_file, github_create_pull_request.
+For issues, comments, statuses, search, and merge, use search_tools by keyword then load_tool to activate:
+- Issues: "list issues create issue"
+- PRs: "list pull requests merge"
+- Comments: "comment PR issue"
+- Status: "commit status deployment status"
+- Search: "search repo content"
 
 When a connectorId is provided in the delegation message, use that connector_id when calling get_github_repositories to list repos from the correct GitHub account. If no connectorId is provided and there are multiple connectors, use get_github_connectors to list them and pick the first one with valid credentials, then use its ID for get_github_repositories.
 
@@ -41,9 +74,9 @@ Return the PR URL, PR number, and fix branch name to the parent agent in your fi
 
 Never use emojis in any output. Plain text only.`,
   model: config.agentLightModel,
-  inputProcessors: [unicodeNormalizer],
+  inputProcessors: [unicodeNormalizer, githubToolSearch],
   outputProcessors: [tokenLimiter(config.agentMaxOutputTokens)],
-  tools: safeGithubTools,
+  tools: githubCoreTools,
   defaultOptions: agentDefaults({
     maxSteps: 12,
     modelSettings: { maxOutputTokens: config.agentMaxOutputTokens },

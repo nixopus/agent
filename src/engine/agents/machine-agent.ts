@@ -1,4 +1,5 @@
 import { Agent } from '@mastra/core/agent';
+import { ToolSearchProcessor } from '@mastra/core/processors';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, openrouterProvider, agentDefaults } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
@@ -8,31 +9,48 @@ import { getServersTool, getServersSshStatusTool } from '../tools/api/system-too
 import { getDomainsTool } from '../tools/api/domain-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 
-const machineAgentTools = {
+export const rawMachineCoreTools = {
   getMachineStats: machineTools.getMachineStats,
   hostExec: machineTools.hostExec,
   getMachineLifecycleStatus: machineTools.getMachineLifecycleStatus,
+  getServers: getServersTool,
+  getServersSshStatus: getServersSshStatusTool,
+  getDomains: getDomainsTool,
+  getMachineMetrics: machineTools.getMachineMetrics,
+  getMachineMetricsSummary: machineTools.getMachineMetricsSummary,
+};
+
+export const rawMachineSearchableTools = {
   restartMachine: machineTools.restartMachine,
   pauseMachine: machineTools.pauseMachine,
   resumeMachine: machineTools.resumeMachine,
-  getMachineMetrics: machineTools.getMachineMetrics,
-  getMachineMetricsSummary: machineTools.getMachineMetricsSummary,
   getMachineEvents: machineTools.getMachineEvents,
   getBackupSchedule: backupTools.getBackupSchedule,
   listMachineBackups: backupTools.listMachineBackups,
   triggerMachineBackup: backupTools.triggerMachineBackup,
   updateBackupSchedule: backupTools.updateBackupSchedule,
-  getServers: getServersTool,
-  getServersSshStatus: getServersSshStatusTool,
-  getDomains: getDomainsTool,
 };
-const safeMachineAgentTools = guardToolsForSchemaCompat(machineAgentTools);
+
+const machineCoreTools = guardToolsForSchemaCompat(rawMachineCoreTools);
+const machineSearchableTools = guardToolsForSchemaCompat(rawMachineSearchableTools);
+
+const machineToolSearch = new ToolSearchProcessor({
+  tools: machineSearchableTools,
+  search: { topK: 4, minScore: 0.1 },
+});
 
 export const machineAgent = new Agent({
   id: 'machine-agent',
   name: 'Machine Agent',
   description: 'Manages server-level operations: system health (CPU, RAM, disk), Docker daemon, Caddy proxy, DNS, network connectivity, and machine backups (list, schedule, trigger).',
   instructions: `Machine-level diagnostics and lifecycle management. No emojis. Plain text only.
+
+## Tool Loading
+Core tools are available immediately: get_machine_stats, host_exec, get_machine_lifecycle_status, get_servers, get_servers_ssh_status, get_domains, get_machine_metrics, get_machine_metrics_summary.
+For lifecycle mutations and backups, use search_tools by keyword then load_tool to activate:
+- Lifecycle: "restart pause resume machine"
+- Events: "machine events lifecycle"
+- Backups: "backup schedule list trigger update"
 
 ## Skills
 You have workspace skills. For domain, DNS, TLS, or proxy issues, ALWAYS load:
@@ -77,9 +95,9 @@ Root cause: bold summary, evidence in code block, fix in 1-2 sentences.
 No anomalies: report healthy with key metrics.`,
   model: config.agentLightModel,
   workspace: createRequestWorkspace,
-  inputProcessors: [unicodeNormalizer],
+  inputProcessors: [unicodeNormalizer, machineToolSearch],
   outputProcessors: [tokenLimiter(4000)],
-  tools: safeMachineAgentTools,
+  tools: machineCoreTools,
   defaultOptions: agentDefaults({
     maxSteps: 12,
     modelSettings: { maxOutputTokens: 4000 },

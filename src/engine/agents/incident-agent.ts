@@ -1,5 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
+import { ToolSearchProcessor } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, agentDefaults } from './shared';
@@ -25,6 +26,15 @@ import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
 
 const INCIDENT_INSTRUCTIONS = `You are an autonomous incident response agent. You receive structured failure events from various sources and attempt to diagnose, fix, and notify. Plain text only, no emojis.
+
+## Tool Loading
+Core tools are available immediately: get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers, get_container, get_container_logs, get_github_connectors, get_github_repositories, send_notification, redeploy_application, restart_deployment.
+For GitHub ops, channel-specific notifications, and app logs, use search_tools by keyword then load_tool to activate:
+- GitHub file/PR: "github branch file PR create update"
+- GitHub issues/comments: "github issues comment create"
+- GitHub status: "commit status deployment status"
+- App logs: "application logs"
+- Slack/Discord/Email: "slack discord email notification"
 
 ## Skills
 You have workspace skills. ALWAYS load the incident response skill first:
@@ -65,25 +75,50 @@ const incidentMemory = new Memory({
   },
 });
 
-const rawIncidentTools = {
+export const rawIncidentCoreTools = {
   getApplications: getApplicationsTool,
   getApplication: getApplicationTool,
   getApplicationDeployments: getApplicationDeploymentsTool,
   getDeploymentLogs: getDeploymentLogsTool,
-  getApplicationLogs: getApplicationLogsTool,
-  redeployApplication: redeployApplicationTool,
-  restartDeployment: restartDeploymentTool,
-  getGithubConnectors: getGithubConnectorsTool,
-  getGithubRepositories: getGithubRepositoriesTool,
-  getGithubRepositoryBranches: getGithubRepositoryBranchesTool,
-  ...githubTools,
-  ...notificationTools,
   listContainers: listContainersTool,
   getContainer: getContainerTool,
   getContainerLogs: getContainerLogsTool,
+  getGithubConnectors: getGithubConnectorsTool,
+  getGithubRepositories: getGithubRepositoriesTool,
+  sendNotification: notificationTools.sendNotification,
+  redeployApplication: redeployApplicationTool,
+  restartDeployment: restartDeploymentTool,
 };
 
-const incidentTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat(rawIncidentTools)));
+export const rawIncidentSearchableTools = {
+  getApplicationLogs: getApplicationLogsTool,
+  getGithubRepositoryBranches: getGithubRepositoryBranchesTool,
+  githubListPullRequests: githubTools.githubListPullRequests,
+  githubListIssues: githubTools.githubListIssues,
+  githubCommentOnPr: githubTools.githubCommentOnPr,
+  githubCommentOnIssue: githubTools.githubCommentOnIssue,
+  githubCreateIssue: githubTools.githubCreateIssue,
+  githubSetCommitStatus: githubTools.githubSetCommitStatus,
+  githubCreateDeploymentStatus: githubTools.githubCreateDeploymentStatus,
+  githubSearchRepoContent: githubTools.githubSearchRepoContent,
+  githubGetRepoFile: githubTools.githubGetRepoFile,
+  githubCreateOrUpdateFile: githubTools.githubCreateOrUpdateFile,
+  githubGetBranch: githubTools.githubGetBranch,
+  githubCreateBranch: githubTools.githubCreateBranch,
+  githubCreatePullRequest: githubTools.githubCreatePullRequest,
+  githubMergePullRequest: githubTools.githubMergePullRequest,
+  sendSlackNotification: notificationTools.sendSlackNotification,
+  sendDiscordNotification: notificationTools.sendDiscordNotification,
+  sendEmailNotification: notificationTools.sendEmailNotification,
+};
+
+const incidentCoreTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat(rawIncidentCoreTools)));
+const incidentSearchableTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat(rawIncidentSearchableTools)));
+
+const incidentToolSearch = new ToolSearchProcessor({
+  tools: incidentSearchableTools,
+  search: { topK: 6, minScore: 0.1 },
+});
 
 export const incidentAgent = new Agent({
   id: 'incident-agent',
@@ -92,9 +127,9 @@ export const incidentAgent = new Agent({
   instructions: INCIDENT_INSTRUCTIONS,
   model: config.agentModel,
   workspace: createRequestWorkspace,
-  inputProcessors: [unicodeNormalizer],
+  inputProcessors: [unicodeNormalizer, incidentToolSearch],
   outputProcessors: [tokenLimiter(4000)],
-  tools: incidentTools,
+  tools: incidentCoreTools,
   agents: {
     diagnostics: diagnosticAgent,
     github: githubAgent,
