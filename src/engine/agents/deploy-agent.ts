@@ -37,7 +37,6 @@ import {
   PROMPT_ONLY_AGENTS,
   AGENT_STEP_LIMITS,
   DEPLOY_INSTRUCTIONS,
-  TRIAL_MACHINE_NOTICE,
 } from './shared';
 import { DeployStateProcessor } from './deploy-state-processor';
 import { createRequestWorkspace } from '../workspace-factory';
@@ -176,13 +175,7 @@ async function handleDelegationComplete(context: { primitiveId: string; result?:
 export const deployAgent = new Agent({
   id: 'deploy-agent',
   name: 'Deploy Agent',
-  instructions: ({ requestContext }) => {
-    if (config.selfHosted) return DEPLOY_INSTRUCTIONS;
-    const warning = requestContext?.get?.('machineWarning') as { status?: string } | undefined;
-    return warning?.status === 'upgrade_required'
-      ? DEPLOY_INSTRUCTIONS + TRIAL_MACHINE_NOTICE
-      : DEPLOY_INSTRUCTIONS;
-  },
+  instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
   inputProcessors: [unicodeNormalizer, deployStateProcessor],
   workspace: createRequestWorkspace,
