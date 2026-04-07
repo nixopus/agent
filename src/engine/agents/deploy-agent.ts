@@ -119,6 +119,7 @@ export const rawDeploySearchableTools = {
   testMcpServerConnection: mcpServerTools.testMcpServerConnection,
   discoverMcpTools: mcpServerTools.discoverMcpTools,
   listEnabledMcpServers: mcpServerTools.listEnabledMcpServers,
+  callMcpTool: mcpServerTools.callMcpTool,
 };
 
 const deployCoreTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeployCoreTools))));

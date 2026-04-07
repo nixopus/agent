@@ -7,6 +7,7 @@ import {
   listOrgMcpServers,
   agentDiscoverToolsFromAllEnabledMcpServers,
   agentListEnabledServersWithCredentials,
+  agentInvokeAToolOnAnMcpServer,
   zAddMcpServerData,
   zDeleteMcpServerData,
   zUpdateMcpServerData,
@@ -15,6 +16,7 @@ import {
   zListOrgMcpServersData,
   zAgentDiscoverToolsFromAllEnabledMcpServersData,
   zAgentListEnabledServersWithCredentialsData,
+  zAgentInvokeAToolOnAnMcpServerData,
 } from '@nixopus/api-client';
 import { defineToolGroup } from './tool-factory';
 
@@ -62,7 +64,7 @@ const tools = defineToolGroup({
   },
   discoverMcpTools: {
     id: 'discover_mcp_tools',
-    description: 'Read-only. Discover tools available from all enabled MCP servers. Returns tool names, descriptions, and schemas.',
+    description: 'Read-only. Discover tools from all enabled MCP servers. Returns server_id, tool names, descriptions, and inputSchema for each tool. Use the server_id and tool name with call_mcp_tool to invoke them.',
     schema: zAgentDiscoverToolsFromAllEnabledMcpServersData,
     sdkFn: agentDiscoverToolsFromAllEnabledMcpServers,
     params: 'query' as const,
@@ -74,6 +76,12 @@ const tools = defineToolGroup({
     sdkFn: agentListEnabledServersWithCredentials,
     params: 'query' as const,
   },
+  callMcpTool: {
+    id: 'call_mcp_tool',
+    description: 'Mutating. Execute a tool on an MCP server. First call discover_mcp_tools to get server_id and tool schemas. Pass: server_id (UUID), tool_name (exact name), arguments (JSON object with proper types matching the inputSchema — use strings, numbers, booleans as appropriate, NOT everything as strings). Returns tool output as content array.',
+    schema: zAgentInvokeAToolOnAnMcpServerData,
+    sdkFn: agentInvokeAToolOnAnMcpServer,
+  },
 });
 
 export const listMcpProviderCatalogTool = tools.listMcpProviderCatalog;
@@ -84,4 +92,5 @@ export const deleteMcpServerTool = tools.deleteMcpServer;
 export const testMcpServerConnectionTool = tools.testMcpServerConnection;
 export const discoverMcpToolsTool = tools.discoverMcpTools;
 export const listEnabledMcpServersTool = tools.listEnabledMcpServers;
+export const callMcpToolTool = tools.callMcpTool;
 export const mcpServerTools = tools;
