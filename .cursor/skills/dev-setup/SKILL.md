@@ -46,12 +46,11 @@ See `.env.sample` for the full list.
 
 ## LLM Providers
 
-Default is **Ollama** (local, no API key). Set env vars to switch:
+Default is **OpenRouter**. Set env vars to switch:
 
 | Provider | Setup |
 |---|---|
-| **Ollama** (default) | No config needed. Runs locally. |
-| **OpenRouter** | Set `OPENROUTER_API_KEY` |
+| **OpenRouter** (default) | Set `OPENROUTER_API_KEY` |
 | **OpenAI** | `OPENAI_API_KEY` + `AGENT_MODEL=openai/gpt-4o` |
 | **Anthropic** | `ANTHROPIC_API_KEY` + `AGENT_MODEL=anthropic/claude-sonnet-4` |
 | **Google Gemini** | `GOOGLE_GENERATIVE_AI_API_KEY` + `AGENT_MODEL=google/gemini-2.5-flash` |

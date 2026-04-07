@@ -47,7 +47,6 @@ import { infrastructureAgent } from './agents/infrastructure-agent';
 import { githubAgent } from './agents/github-agent';
 import { incidentAgent } from './agents/incident-agent';
 
-import { OllamaLocalGateway } from './ollama-gateway';
 import { creditRoutes } from '../features/credits/routes';
 import { incidentRoutes } from '../features/incidents/incidents';
 import { createRateLimiter } from '../middleware/rate-limit';
@@ -102,12 +101,9 @@ const agents = {
   incidentAgent,
 };
 
-const isOllamaModel = config.agentModel.startsWith('ollama/') || config.agentLightModel.startsWith('ollama/');
-
 export const mastra = new Mastra({
   agents,
   storage: getPostgresStore(),
-  gateways: isOllamaModel ? { ollama: new OllamaLocalGateway() } : undefined,
   bundler: {
     externals: ['ssh2', 'bullmq', 'bufferutil', 'utf-8-validate', '@tanstack/react-query', 'react'],
   },

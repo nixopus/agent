@@ -13,7 +13,6 @@ The single entry point is `src/engine/index.ts`. It creates one `Mastra` instanc
 
 - **Agents** — all agents in a single `agents` object
 - **Storage** — `PostgresStore` for workflow snapshots and agent state
-- **Gateways** — optional `OllamaLocalGateway` for local models
 - **Observability** — `DefaultExporter` with `SensitiveDataFilter`
 - **Logger** — Pino via `@mastra/loggers`
 - **Server** — port/host, API routes, middleware stack
@@ -22,7 +21,6 @@ The single entry point is `src/engine/index.ts`. It creates one `Mastra` instanc
 export const mastra = new Mastra({
   agents,
   storage: getPostgresStore(),
-  gateways: isOllamaModel ? { ollama: new OllamaLocalGateway() } : undefined,
   server: {
     port: config.port,
     host: config.host,

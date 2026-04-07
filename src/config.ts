@@ -1,9 +1,3 @@
-const DEFAULT_OLLAMA_MODEL = 'llama3.2:1b';
-
-function ollamaModelId(): string {
-  return 'ollama/ollama/' + (process.env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL);
-}
-
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
@@ -31,10 +25,8 @@ export const config = {
 
   dashboardUrl: process.env.DASHBOARD_URL || '',
 
-  agentModel: process.env.AGENT_MODEL
-    || (process.env.OPENROUTER_API_KEY ? 'openrouter/anthropic/claude-sonnet-4' : ollamaModelId()),
-  agentLightModel: process.env.AGENT_LIGHT_MODEL
-    || (process.env.OPENROUTER_API_KEY ? 'openrouter/openai/gpt-4o-mini' : ollamaModelId()),
+  agentModel: process.env.AGENT_MODEL || 'openrouter/anthropic/claude-sonnet-4',
+  agentLightModel: process.env.AGENT_LIGHT_MODEL || 'openrouter/openai/gpt-4o-mini',
   agentMaxOutputTokens: parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS || '4000', 10),
   agentMaxSteps: parseInt(process.env.AGENT_MAX_STEPS || '15', 10),
 
@@ -61,8 +53,7 @@ export const config = {
   observationalMemory: {
     messageTokens: parseInt(process.env.OM_MESSAGE_TOKENS || '30000', 10),
     observationTokens: parseInt(process.env.OM_OBSERVATION_TOKENS || '40000', 10),
-    model: process.env.OM_MODEL
-      || (process.env.OPENROUTER_API_KEY ? 'openrouter/google/gemini-2.5-flash' : ollamaModelId()),
+    model: process.env.OM_MODEL || 'openrouter/google/gemini-2.5-flash',
   },
 
   s3: {

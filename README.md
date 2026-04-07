@@ -10,7 +10,7 @@ The agent is included in the Nixopus self-hosted installer. Run:
 curl -fsSL install.nixopus.com | sudo bash
 ```
 
-The installer will prompt for an optional OpenRouter API key. If left blank, the agent runs with Ollama for fully local inference.
+The installer will prompt for an OpenRouter API key.
 
 ## Local Development
 
@@ -35,14 +35,13 @@ The dev server starts on `http://localhost:9090`.
 
 ## LLM Providers
 
-By default, the agent uses **Ollama** for local inference (no API key required). Set `OPENROUTER_API_KEY` to automatically switch to cloud models via OpenRouter.
+By default, the agent uses **OpenRouter**. Set `OPENROUTER_API_KEY` to enable it.
 
 You can also use any supported provider by setting `AGENT_MODEL` and `AGENT_LIGHT_MODEL` directly:
 
 | Provider | Setup |
 |----------|-------|
-| **Ollama** (default) | No config needed. Runs locally. |
-| **OpenRouter** | Set `OPENROUTER_API_KEY` |
+| **OpenRouter** (default) | Set `OPENROUTER_API_KEY` |
 | **OpenAI** | Set `OPENAI_API_KEY` + `AGENT_MODEL=openai/gpt-4o` |
 | **Anthropic** | Set `ANTHROPIC_API_KEY` + `AGENT_MODEL=anthropic/claude-sonnet-4` |
 | **Google Gemini** | Set `GOOGLE_GENERATIVE_AI_API_KEY` + `AGENT_MODEL=google/gemini-2.5-flash` |

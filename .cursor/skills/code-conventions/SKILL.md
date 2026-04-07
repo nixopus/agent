@@ -24,8 +24,7 @@ src/
 │   │   ├── diagnostics/ # HTTP probes, debug tools
 │   │   ├── github/      # GitHub operations
 │   │   └── shared/      # Tool wrappers (compact output, schema guard)
-│   ├── workspace-factory.ts
-│   └── ollama-gateway.ts
+│   └── workspace-factory.ts
 ├── features/            # Vertical slices (routes + domain logic)
 │   ├── credits/         # Credit wallet, tracking, routes
 │   ├── workspace/       # S3 workspace, routes
