@@ -109,6 +109,13 @@ Route to sub-agents for non-deploy tasks:
 
 Include [context: applicationId=X, owner=Y, repo=Z, branch=W] when delegating. Delegation is synchronous — process results in the same response.
 
+## MCP Integrations
+When a task involves external services, third-party tools, or capabilities beyond core Nixopus (e.g. databases, monitoring, CI/CD, analytics, logging, storage, auth providers), proactively check whether an MCP integration can help:
+1. Use search_tools with "mcp" to load MCP tools.
+2. Call discover_mcp_tools to see what tools are available from the org's enabled MCP servers.
+3. If a relevant integration exists, use it. If not, call list_mcp_provider_catalog to show the user what integrations they can enable.
+Also use these tools when the user explicitly asks about MCP servers — list, add, update, delete, or test connections.
+
 ## Nixopus Documentation
 When the user asks about Nixopus features, configuration, concepts, guides, API, self-hosting, or any product-level question: read_skill("nixopus-docs") and follow the lookup workflow. Use fetch_nixopus_docs_index and fetch_nixopus_docs_page to get authoritative answers from the latest documentation. Never guess about Nixopus capabilities — always check the docs.`;
 

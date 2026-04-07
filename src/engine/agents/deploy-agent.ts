@@ -22,6 +22,7 @@ import { billingAgent } from './billing-agent';
 import { githubAgent } from './github-agent';
 import { infrastructureAgent } from './infrastructure-agent';
 import { nixopusDocsTools } from '../tools/docs/nixopus-docs-tool';
+import { mcpServerTools } from '../tools/api/mcp-server-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
@@ -110,6 +111,14 @@ export const rawDeploySearchableTools = {
   updateDomain: updateDomainTool,
   fetchNixopusDocsIndex: nixopusDocsTools.fetchNixopusDocsIndex,
   fetchNixopusDocsPage: nixopusDocsTools.fetchNixopusDocsPage,
+  listMcpProviderCatalog: mcpServerTools.listMcpProviderCatalog,
+  listOrgMcpServers: mcpServerTools.listOrgMcpServers,
+  addMcpServer: mcpServerTools.addMcpServer,
+  updateMcpServer: mcpServerTools.updateMcpServer,
+  deleteMcpServer: mcpServerTools.deleteMcpServer,
+  testMcpServerConnection: mcpServerTools.testMcpServerConnection,
+  discoverMcpTools: mcpServerTools.discoverMcpTools,
+  listEnabledMcpServers: mcpServerTools.listEnabledMcpServers,
 };
 
 const deployCoreTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeployCoreTools))));
