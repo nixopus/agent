@@ -131,3 +131,17 @@ If the fix PR is merged and a new deployment triggers:
 - **`failure-diagnosis`** — Pattern tables for identifying root causes
 - **`rollback-strategy`** — When to rollback vs fix forward
 - **`post-deploy-verification`** — Verify fix worked after merge
+
+## Event Context
+
+Your prompt contains the full incident context formatted by the event pipeline. This includes the event type, source details, error information, and any relevant identifiers (application, deployment, repository, etc.). Use all provided context to drive your investigation.
+
+## Safety Rules
+
+- Never merge PRs. Always return the PR URL for user approval.
+- Never push to main/master. Always create a fix branch.
+- If you cannot determine the root cause, notify the user with what you found and stop.
+- Do not retry the same fix more than once. Maximum 3 auto-fix attempts per incident before escalating.
+- Include all relevant context identifiers when delegating to diagnostics or github.
+- After delegation returns, immediately process the result. Never say work is "underway".
+- Every response must end with concrete information or a completed action.

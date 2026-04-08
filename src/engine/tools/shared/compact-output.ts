@@ -3,7 +3,7 @@ const SEMANTIC_FIELDS = [
   'message', 'error', 'domain', 'url', 'repository', 'branch',
   'description', 'ok', 'success', 'version', 'image',
   'port', 'host', 'email', 'role', 'source', 'result',
-  'level', 'severity', 'exit_code', 'command',
+  'level', 'severity', 'exit_code', 'command', 'log', 'output',
 ];
 
 const DROP_FIELDS = new Set([
@@ -19,6 +19,7 @@ const LIST_KEYS = [
   'items', 'results', 'applications', 'deployments', 'domains',
   'repositories', 'extensions', 'containers', 'servers',
   'services', 'entries', 'checks', 'flags', 'data',
+  'logs', 'children', 'labels', 'compose_services',
 ];
 
 const MAX_ARRAY_ITEMS = 15;
@@ -78,16 +79,41 @@ function isAlreadyCompacted(data: unknown): boolean {
   return !!meta && typeof meta === 'object' && (meta as Record<string, unknown>).compact === true;
 }
 
+function flattenNestedObject(val: unknown): unknown {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return val;
+  const obj = val as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  if (keys.length <= 3) return obj;
+  const picked: Record<string, unknown> = {};
+  let count = 0;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v == null || v === '' || DROP_FIELDS.has(k)) continue;
+    if (typeof v === 'object' && !Array.isArray(v)) continue;
+    picked[k] = v;
+    if (++count >= 3) break;
+  }
+  return picked;
+}
+
 function compactArray(arr: unknown[]): unknown[] {
   return arr.slice(0, MAX_ARRAY_ITEMS).map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
-    return selectSemanticFields(stripDeadWeight(item as Record<string, unknown>));
+    const selected = selectSemanticFields(stripDeadWeight(item as Record<string, unknown>));
+    const flattened: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(selected)) {
+      flattened[k] = flattenNestedObject(v);
+    }
+    return flattened;
   });
 }
 
-function compactValue(data: unknown): unknown {
+const MAX_COMPACT_DEPTH = 3;
+
+function compactValue(data: unknown, depth: number = 0): unknown {
   if (data == null || typeof data !== 'object') return data;
   if (isAlreadyCompacted(data)) return data;
+  if (depth > MAX_COMPACT_DEPTH) return trimStrings(data);
 
   if (Array.isArray(data)) {
     const compacted = compactArray(data);
@@ -107,7 +133,7 @@ function compactValue(data: unknown): unknown {
     for (const [k, v] of Object.entries(obj)) {
       if (k === listKey) continue;
       if (DROP_FIELDS.has(k) || v == null) continue;
-      rest[k] = v;
+      rest[k] = compactValue(v, depth + 1);
     }
     const result: Record<string, unknown> = { [listKey]: trimStrings(compacted), ...rest };
     if (list.length > MAX_ARRAY_ITEMS) {
@@ -116,7 +142,13 @@ function compactValue(data: unknown): unknown {
     return result;
   }
 
-  return trimStrings(obj);
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    result[k] = (v && typeof v === 'object' && !Array.isArray(v))
+      ? compactValue(v, depth + 1)
+      : v;
+  }
+  return trimStrings(result);
 }
 
 export function withCompactOutput<T extends Record<string, unknown>>(tools: T): T {

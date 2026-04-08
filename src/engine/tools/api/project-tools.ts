@@ -13,7 +13,7 @@ import {
   zAddProjectToFamilyData,
 } from '@nixopus/api-client';
 import { defineToolGroup } from './tool-factory';
-import { getClient } from './shared';
+import { getClient, compactResult } from './shared';
 
 const tools = defineToolGroup({
   createProject: {
@@ -37,10 +37,11 @@ const tools = defineToolGroup({
           inner.dockerfile_path = 'docker-compose.yml';
         }
       }
-      return createProject({
+      const result = await createProject({
         client: getClient(ctx),
         body: inner,
       } as unknown as Parameters<typeof createProject>[0]);
+      return compactResult(result, 'create_project');
     },
   },
   deployProject: {
@@ -48,6 +49,7 @@ const tools = defineToolGroup({
     description: 'Mutating. Deploy a project/application. Do not pass source again when already persisted.',
     schema: zDeployProjectData,
     sdkFn: deployProject,
+    compact: true,
   },
   duplicateProject: {
     id: 'duplicate_project',

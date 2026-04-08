@@ -3,7 +3,7 @@ import type { MastraMemory } from '@mastra/core/memory';
 import { ToolSearchProcessor } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
-import { unicodeNormalizer, tokenLimiter, agentDefaults } from './shared';
+import { unicodeNormalizer, tokenLimiter, agentDefaults, coreInstructions } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
 import {
   getApplicationsTool,
@@ -25,38 +25,20 @@ import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
 
-const INCIDENT_INSTRUCTIONS = `You are an autonomous incident response agent. You receive structured failure events from various sources and attempt to diagnose, fix, and notify. Plain text only, no emojis.
-
-## Tool Loading
-Core tools are available immediately: get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers, get_container, get_container_logs, get_github_connectors, get_github_repositories, send_notification, redeploy_application, restart_deployment.
-For GitHub ops, channel-specific notifications, and app logs, use search_tools by keyword then load_tool to activate:
-- GitHub file/PR: "github branch file PR create update"
-- GitHub issues/comments: "github issues comment create"
-- GitHub status: "commit status deployment status"
-- App logs: "application logs"
-- Slack/Discord/Email: "slack discord email notification"
-
-## Skills
-You have workspace skills. ALWAYS load the incident response skill first:
-- read_skill("incident-response") — severity classification, structured workflow, auto-fix decision matrix, notification templates
-- read_skill("rollback-strategy") — use when deciding whether to rollback vs fix forward after repeated failures
-
-Follow the workflow defined in the incident-response skill. It provides severity classification, decision matrices, and notification templates.
-
-## Event Context
-Your prompt contains the full incident context formatted by the event pipeline. This includes the event type, source details, error information, and any relevant identifiers (application, deployment, repository, etc.). Use all provided context to drive your investigation.
-
-## Rules
-- Never merge PRs. Always return the PR URL for user approval.
-- Never push to main/master. Always create a fix branch.
-- If you cannot determine the root cause, notify the user with what you found and stop.
-- Do not retry the same fix more than once. Maximum 3 auto-fix attempts per incident before escalating.
-- Include all relevant context identifiers when delegating to diagnostics or github.
-- After delegation returns, immediately process the result. Never say work is "underway".
-- Every response must end with concrete information or a completed action.
+const INCIDENT_INSTRUCTIONS = coreInstructions(
+  'You are an autonomous incident response agent. You receive structured failure events and attempt to diagnose, fix, and notify. Plain text only, no emojis.',
+  [
+    'incident-response — Severity classification, structured workflow, auto-fix decision matrix, notification templates, safety rules. ALWAYS load first.',
+    'rollback-strategy — When to rollback vs fix forward after repeated failures.',
+    'failure-diagnosis — Pattern tables for build errors, container crashes.',
+  ],
+  `## Tool Loading
+Core tools: get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers, get_container, get_container_logs, get_github_connectors, get_github_repositories, send_notification, redeploy_application, restart_deployment.
+For GitHub ops, channel-specific notifications, and app logs, use search_tools("<keyword>") then load_tool.
 
 ## Memory
-Use recalled context from past incidents for this thread when helpful. Prefer continuity across steps in the same incident.`;
+Use recalled context from past incidents for this thread when helpful. Prefer continuity across steps in the same incident.`,
+);
 
 const incidentMemory = new Memory({
   options: {
