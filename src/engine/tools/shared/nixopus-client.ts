@@ -13,6 +13,7 @@ export function createNixopusClient(requestContext?: NixopusRequestContext) {
   const token = requestContext?.get?.('authToken') || config.authToken;
   const cookies = requestContext?.get?.('cookies');
   const orgId = requestContext?.get?.('organizationId');
+  const userId = requestContext?.get?.('userId');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -28,6 +29,9 @@ export function createNixopusClient(requestContext?: NixopusRequestContext) {
   }
   if (orgId) {
     headers['X-Organization-Id'] = orgId;
+  }
+  if (userId) {
+    headers['X-User-Id'] = userId as string;
   }
 
   return createClient({
