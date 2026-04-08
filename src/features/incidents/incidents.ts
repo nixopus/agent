@@ -57,6 +57,7 @@ export async function getM2MToken(): Promise<string> {
     grant_type: 'client_credentials',
     client_id: clientId,
     client_secret: clientSecret,
+    ...(config.apiUrl ? { resource: config.apiUrl } : {}),
   });
 
   const res = await fetch(tokenUrl, {
