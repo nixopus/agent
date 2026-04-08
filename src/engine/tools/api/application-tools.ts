@@ -69,6 +69,7 @@ const tools = defineToolGroup({
     schema: zGetDeploymentData,
     sdkFn: getDeployment,
     params: 'path' as const,
+    compact: true,
   },
   getDeploymentLogs: {
     id: 'get_deployment_logs',
@@ -109,21 +110,24 @@ const tools = defineToolGroup({
   },
   updateApplicationLabels: {
     id: 'update_application_labels',
-    description: '[MUTATING] Replace all labels on an app (overwrites, not append). Required: query.id (app UUID), body.labels (string[] — full desired list).',
+    description: '[MUTATING] Replace all labels on an app (overwrites, not append). Required: id (app UUID), labels (string[] — full desired list).',
     schema: zUpdateApplicationLabelsData,
     sdkFn: updateApplicationLabels,
+    queryKeys: ['id'],
   },
   addApplicationDomain: {
     id: 'add_application_domain',
-    description: '[MUTATING] Attach a domain to an app. Required: query.id (app UUID), body.domain. For Compose apps: also pass body.service_name to route to a specific service, optionally body.port to override.',
+    description: '[MUTATING] Attach a domain to an app. Required: id (app UUID), domain (string). For Compose apps: also pass service_name to route to a specific service, optionally port to override.',
     schema: zAddApplicationDomainData,
     sdkFn: addApplicationDomain,
+    queryKeys: ['id'],
   },
   removeApplicationDomain: {
     id: 'remove_application_domain',
-    description: '[MUTATING] Remove a domain from an app. Required: query.id (app UUID), body.domain (exact domain string to remove). Check current domains via get_application.',
+    description: '[MUTATING] Remove a domain from an app. Required: id (app UUID), domain (exact domain string to remove). Check current domains via get_application.',
     schema: zRemoveApplicationDomainData,
     sdkFn: removeApplicationDomain,
+    queryKeys: ['id'],
   },
   restartDeployment: {
     id: 'restart_deployment',

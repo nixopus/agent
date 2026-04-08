@@ -1,32 +1,29 @@
 ---
 name: domain-attachment
-description: Attach a domain to an application after deployment. Covers auto-generated subdomains, existing domain selection, and custom domain setup with DNS configuration and verification.
+description: Domain setup for applications. Preferred path is passing domains at creation time via createProject. Falls back to add_application_domain for post-creation attachment or custom domains.
 metadata:
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Domain Attachment
 
-After a successful deployment, the app needs a domain to be reachable. Follow this flow.
+## Preferred: Pass Domain at Creation Time
 
-## Step 1: Gather Options
+The fastest path — zero extra tool calls after project creation:
 
-- Call `get_domains` to list available domains.
-- Call `generate_random_subdomain` to get a subdomain suggestion.
+1. Call `generate_random_subdomain` to get a subdomain.
+2. Pass `domains: ["<subdomain>"]` in the `createProject` call.
+3. Done — the domain is attached at creation, wildcard DNS and TLS are automatic.
 
-## Step 2: Present Options
+Use this path for all standard deploys. Only fall back to the post-creation flow below when adding domains to an existing app or when the user wants a custom domain.
 
-- If only one domain exists, attach it automatically with `add_application_domain`.
-- If multiple domains exist, present the list and ask the user which to use.
-- Always offer the generated subdomain as a quick option (works immediately, no DNS setup needed).
-- Ask if the user wants to use a custom domain instead.
+## Post-Creation: Auto-Generated Subdomain
 
-## Step 3: Auto-Generated Subdomain (fast path)
+If the app already exists and has no domain:
 
-If the user picks the generated subdomain:
-
-1. Call `add_application_domain` with the subdomain.
-2. Done — wildcard DNS and TLS are handled automatically.
+1. Call `generate_random_subdomain`.
+2. Call `add_application_domain` with id (app UUID) and the subdomain.
+3. Done — wildcard DNS and TLS are handled automatically.
 
 ## Step 4: Custom Domain Setup
 

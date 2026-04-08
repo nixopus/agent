@@ -3,7 +3,7 @@ import type { MastraMemory } from '@mastra/core/memory';
 import { ToolSearchProcessor } from '@mastra/core/processors';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
-import { unicodeNormalizer, tokenLimiter, openrouterProvider, agentDefaults } from './shared';
+import { unicodeNormalizer, tokenLimiter, openrouterProvider, agentDefaults, coreInstructions } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
 import {
   getApplicationsTool,
@@ -66,32 +66,21 @@ export const diagnosticAgent = new Agent({
   name: 'Diagnostic Agent',
   description:
     'Application-level debugger. Investigates deployment failures, container crashes, build errors, and runtime issues layer by layer.',
-  instructions: `Application and container debugger. Discover IDs via list tools. No emojis. Plain text only.
-
-## Skills
-You have workspace skills. ALWAYS start by loading the failure diagnosis skill:
-- read_skill("failure-diagnosis") — pattern tables for build errors, container crashes, and a diagnostic decision tree
-- read_skill("container-resource-tuning") — use when containers are OOM-killed (exit 137), CPU-throttled, or running slowly due to resource limits
-
-After identifying the ecosystem, load the matching ecosystem skill for deeper context:
-- node-deploy, go-deploy, python-deploy, rust-deploy, java-deploy, php-deploy, ruby-deploy, elixir-deploy, deno-deploy, dotnet-deploy, cpp-deploy, gleam-deploy, static-deploy, shell-deploy
-
-## Tool Loading
-Core tools are available immediately (get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers). For deeper diagnostics, use search_tools to find tools by keyword (e.g. "container exec inspect", "http probe"), then load_tool to activate them.
-
-## Diagnostic Layers (IN ORDER, stop on root cause)
-1. get_application_deployments 2. get_deployment_logs 3. list_containers → search_tools("container logs") → load needed tools
-4. get_container_logs
-5. search_tools("http probe") → http_probe public URL
-
-If the issue appears application-level, check logs layer by layer. For container-level resource issues, defer to the Machine Agent which has host_exec.
-
-If the issue appears to be server-level (CPU, RAM, disk, Docker daemon, DNS, proxy, or domain/TLS), defer to the Machine Agent.
-
-Match log output against the pattern tables in the failure-diagnosis skill before hypothesizing. Tool 404 → skip layer. Root cause: bold summary, evidence in code block, fix in 1-2 sentences.
+  instructions: coreInstructions(
+    'Application and container debugger. Discover IDs via list tools. No emojis. Plain text only.',
+    [
+      'diagnostic-workflow — Layer-by-layer diagnostic process: deployments, logs, containers, HTTP probes. Load first when investigating any issue.',
+      'failure-diagnosis — Pattern tables for build errors, container crashes, and a diagnostic decision tree.',
+      'container-resource-tuning — OOM-killed (exit 137), CPU-throttled, or slow containers due to resource limits.',
+      'node-deploy, go-deploy, python-deploy, etc. — Ecosystem-specific context. Load after identifying the ecosystem.',
+    ],
+    `## Tool Loading
+Core tools: get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers.
+For deeper diagnostics, use search_tools("<keyword>") then load_tool.
 
 ## Memory
 Use recalled context from this thread when the parent run passes thread and resource. Prefer continuity across diagnostic steps.`,
+  ),
   model: config.agentModel,
   workspace: createRequestWorkspace,
   inputProcessors: [unicodeNormalizer, diagnosticToolSearch],

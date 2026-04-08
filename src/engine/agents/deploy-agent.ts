@@ -1,9 +1,7 @@
 import { Agent } from '@mastra/core/agent';
-import type { MastraDBMessage } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
-import { createLogger } from '../../logger';
 import { applicationTools } from '../tools/api/application-tools';
 import { projectTools } from '../tools/api/project-tools';
 import { githubConnectorTools } from '../tools/api/github-connector-tools';
@@ -21,6 +19,7 @@ import { notificationAgent } from './notification-agent';
 import { billingAgent } from './billing-agent';
 import { githubAgent } from './github-agent';
 import { infrastructureAgent } from './infrastructure-agent';
+import { delegateTool, registerDelegateAgents } from '../tools/shared/delegate-tool';
 import { nixopusDocsTools } from '../tools/docs/nixopus-docs-tool';
 import { mcpServerTools } from '../tools/api/mcp-server-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
@@ -30,21 +29,17 @@ import { withSourceGuard } from '../tools/shared/source-guard';
 import { ToolSearchProcessor } from '@mastra/core/processors';
 import {
   unicodeNormalizer,
+  tokenLimiter,
   openrouterProvider,
   agentDefaults,
-  MAX_DELEGATION_ITERATIONS,
-  MAX_TEXT_MESSAGES_FOR_CONTEXT,
-  DEFAULT_MAX_STEPS,
-  CONTEXT_AWARE_AGENTS,
-  PROMPT_ONLY_AGENTS,
-  AGENT_STEP_LIMITS,
   DEPLOY_INSTRUCTIONS,
 } from './shared';
 import { DeployStateProcessor } from './deploy-state-processor';
+import { ToolResultPruner } from './tool-result-pruner';
 import { createRequestWorkspace } from '../workspace-factory';
 
-const logger = createLogger('deploy-agent');
 const deployStateProcessor = new DeployStateProcessor();
+const toolResultPruner = new ToolResultPruner();
 
 const deployMemory = new Memory({
   options: {
@@ -69,22 +64,22 @@ export const rawDeployCoreTools = {
   getApplicationDeployments: applicationTools.getApplicationDeployments,
   getDeploymentById: applicationTools.getDeploymentById,
   getDeploymentLogs: applicationTools.getDeploymentLogs,
-  createProject: projectTools.createProject,
   deployProject: projectTools.deployProject,
+  createProject: projectTools.createProject,
+  generateRandomSubdomain: generateRandomSubdomainTool,
+  resolveContext: resolveContextTool,
+  askUser: askUserTool,
+};
+
+export const rawDeploySearchableTools = {
   getGithubConnectors: githubConnectorTools.getGithubConnectors,
   getGithubRepositories: githubConnectorTools.getGithubRepositories,
   analyzeRepository: codebaseTools.analyzeRepository,
   prepareCodebase: codebaseTools.prepareCodebase,
   loadLocalWorkspace: codebaseTools.loadLocalWorkspace,
   writeWorkspaceFiles: deployGenTools.writeWorkspaceFiles,
-  resolveContext: resolveContextTool,
-  askUser: askUserTool,
   getDomains: getDomainsTool,
-  generateRandomSubdomain: generateRandomSubdomainTool,
   addApplicationDomain: addApplicationDomainTool,
-};
-
-export const rawDeploySearchableTools = {
   updateApplication: applicationTools.updateApplication,
   updateApplicationLabels: applicationTools.updateApplicationLabels,
   restartDeployment: applicationTools.restartDeployment,
@@ -130,107 +125,28 @@ const deployToolSearch = new ToolSearchProcessor({
   search: { topK: 6, minScore: 0.1 },
 });
 
-function hasToolInvocations(msg: MastraDBMessage): boolean {
-  const parts = msg.content?.parts;
-  if (!Array.isArray(parts)) return false;
-  return parts.some((p) => p.type === 'tool-invocation' || p.type === 'tool-result');
-}
-
-function filterDelegationMessages({ messages, primitiveId }: { messages: MastraDBMessage[]; primitiveId: string }): MastraDBMessage[] {
-  if (PROMPT_ONLY_AGENTS.has(primitiveId)) {
-    return [];
-  }
-
-  return messages
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && !hasToolInvocations(m))
-    .slice(-MAX_TEXT_MESSAGES_FOR_CONTEXT);
-}
-
-function extractContextFromPrompt(prompt: string): string | undefined {
-  const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-  const appIdMatch = prompt.match(/(?:applicationId|application_id)=([0-9a-f-]{36})/i) ?? prompt.match(uuidRe);
-  const appId = appIdMatch?.[1] ?? appIdMatch?.[0];
-  if (!appId) return undefined;
-
-  const ownerMatch = prompt.match(/(?:owner|owner\/repo)=["']?([a-zA-Z0-9_-]+)/i);
-  const repoMatch = prompt.match(/(?:repo(?:sitory)?|repo)=["']?([a-zA-Z0-9_.-]+)/i)
-    ?? (ownerMatch ? prompt.match(/\/([a-zA-Z0-9_.-]+)(?:\s|$|\)|,)/) : null);
-  const branchMatch = prompt.match(/(?:branch)=["']?([a-zA-Z0-9_/-]+)/i);
-
-  const parts = [`applicationId=${appId}`];
-  if (ownerMatch?.[1]) parts.push(`owner=${ownerMatch[1]}`);
-  if (repoMatch?.[1]) parts.push(`repo=${repoMatch[1]}`);
-  parts.push(`branch=${branchMatch?.[1] ?? 'main'}`);
-
-  return `${prompt}\n\n[context: ${parts.join(', ')}]`;
-}
-
-async function handleDelegationStart(context: { primitiveId: string; prompt: string; iteration: number }) {
-  if (context.iteration > MAX_DELEGATION_ITERATIONS) {
-    logger.warn(
-      { primitiveId: context.primitiveId, iteration: context.iteration },
-      'Delegation rejected: max iterations',
-    );
-    return { proceed: false, rejectionReason: 'Too many iterations. Synthesize current findings and report to user.' };
-  }
-
-  const shouldInjectContext = CONTEXT_AWARE_AGENTS.has(context.primitiveId)
-    && !context.prompt.includes('[context: applicationId=');
-
-  const modifiedPrompt = shouldInjectContext
-    ? extractContextFromPrompt(context.prompt)
-    : undefined;
-
-  const modifiedMaxSteps = AGENT_STEP_LIMITS[context.primitiveId] ?? DEFAULT_MAX_STEPS;
-  logger.info(
-    {
-      primitiveId: context.primitiveId,
-      iteration: context.iteration,
-      modifiedMaxSteps,
-      contextInjected: Boolean(modifiedPrompt),
-    },
-    'Delegation start',
-  );
-  return { proceed: true, modifiedMaxSteps, ...(modifiedPrompt && { modifiedPrompt }) };
-}
-
-async function handleDelegationComplete(context: { primitiveId: string; result?: unknown; error?: unknown; bail: () => void }) {
-  if (!context.error) {
-    logger.info({ primitiveId: context.primitiveId }, 'Delegation complete');
-    return {};
-  }
-
-  logger.error({ primitiveId: context.primitiveId, error: context.error }, 'delegation failed');
-  context.bail();
-  return { feedback: `Delegation to ${context.primitiveId} failed: ${context.error}. Try using direct tools instead.` };
-}
+registerDelegateAgents({
+  diagnostics: diagnosticAgent,
+  machine: machineAgent,
+  infrastructure: infrastructureAgent,
+  github: githubAgent,
+  preDeploy: preDeployAgent,
+  notification: notificationAgent,
+  billing: billingAgent,
+});
 
 export const deployAgent = new Agent({
   id: 'deploy-agent',
   name: 'Deploy Agent',
   instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
-  inputProcessors: [unicodeNormalizer, deployStateProcessor, deployToolSearch],
+  inputProcessors: [unicodeNormalizer, deployStateProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
   workspace: createRequestWorkspace,
-  tools: deployCoreTools,
-  agents: {
-    diagnostics: diagnosticAgent,
-    machine: machineAgent,
-    infrastructure: infrastructureAgent,
-    github: githubAgent,
-    preDeploy: preDeployAgent,
-    notification: notificationAgent,
-    billing: billingAgent,
-  },
+  tools: { ...deployCoreTools, delegate: delegateTool },
   memory: deployMemory as unknown as MastraMemory,
   defaultOptions: agentDefaults({
     maxSteps: 100,
     modelSettings: { maxOutputTokens: 4000 },
     providerOptions: openrouterProvider(4000, { cache: true, reasoning: 'low' }),
-    delegation: {
-      messageFilter: filterDelegationMessages,
-      onDelegationStart: handleDelegationStart,
-      onDelegationComplete: handleDelegationComplete,
-    },
   }),
 });

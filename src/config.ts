@@ -11,7 +11,7 @@ export const config = {
 
   redisUrl: process.env.REDIS_URL || '',
 
-  logLevel: (process.env.LOG_LEVEL || 'info') as 'debug' | 'info' | 'warn' | 'error',
+  logLevel: (process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug')) as 'debug' | 'info' | 'warn' | 'error',
   logName: process.env.LOG_NAME || 'Agent',
 
   observabilityEnabled: process.env.OBSERVABILITY_ENABLED !== 'false',

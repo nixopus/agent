@@ -19,6 +19,7 @@ export type ToolDef = {
   sdkFn: (opts: any) => Promise<any>;
   params?: 'body' | 'query' | 'path' | 'spread' | 'body-and-query';
   pathKeys?: string[];
+  queryKeys?: string[];
   compact?: boolean;
   requireApproval?: boolean;
   logs?: { pathKey: string };
@@ -48,7 +49,16 @@ export function createApiTool(def: ToolDef) {
 
       const opts: Record<string, unknown> = { client: getClient(ctx) };
 
-      if (def.pathKeys) {
+      if (def.queryKeys) {
+        const query: Record<string, string> = {};
+        const body: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(input)) {
+          if (def.queryKeys.includes(k)) query[k] = String(v);
+          else body[k] = v;
+        }
+        opts.query = query;
+        if (Object.keys(body).length > 0) opts.body = body;
+      } else if (def.pathKeys) {
         const path: Record<string, string> = {};
         const rest: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(input)) {

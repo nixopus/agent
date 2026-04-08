@@ -79,3 +79,10 @@ Report as a table:
 | Migrations | PASS/WARN/N/A | Migration tool and command |
 
 Only block deployment (report FAIL) for checks 1-4. Checks 5-8 are warnings that should be reported but don't block.
+
+## Summary Format
+Report the checklist table, then:
+**Ready**: what looks good
+**Warnings**: non-critical issues
+**Blockers**: must fix before deploy
+**Recommendations**: specific fixes with code blocks
