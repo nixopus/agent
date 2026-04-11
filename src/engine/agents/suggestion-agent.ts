@@ -60,4 +60,14 @@ export const suggestionAgent = new Agent({
     modelSettings: { maxOutputTokens: 1500 },
     providerOptions: openrouterProvider(1500, { noReasoning: true }),
   }),
+}) as Agent<
+  'suggestion-agent',
+  typeof suggestionTools,
+  undefined,
+  unknown
+> & { tools: typeof suggestionTools; instructions: string };
+
+Object.assign(suggestionAgent, {
+  tools: suggestionTools,
+  instructions: SUGGESTION_INSTRUCTIONS,
 });
