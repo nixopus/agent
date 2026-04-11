@@ -46,6 +46,7 @@ import { notificationAgent } from './agents/notification-agent';
 import { infrastructureAgent } from './agents/infrastructure-agent';
 import { githubAgent } from './agents/github-agent';
 import { incidentAgent } from './agents/incident-agent';
+import { suggestionAgent } from './agents/suggestion-agent';
 
 import { creditRoutes } from '../features/credits/routes';
 import { incidentRoutes } from '../features/incidents/incidents';
@@ -99,6 +100,7 @@ const agents = {
   infrastructureAgent,
   githubAgent,
   incidentAgent,
+  suggestionAgent,
 };
 
 export const mastra = new Mastra({
