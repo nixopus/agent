@@ -1,29 +1,13 @@
 import { Agent } from '@mastra/core/agent';
 import { config } from '../../config';
 import { openrouterProvider, agentDefaults } from './shared';
-import { applicationTools } from '../tools/api/application-tools';
-import { githubConnectorTools } from '../tools/api/github-connector-tools';
-import { getDomainsTool } from '../tools/api/domain-tools';
-import { getServersTool } from '../tools/api/system-tools';
-import { listContainersTool } from '../tools/api/container-tools';
-import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 
-const rawSuggestionTools = {
-  getApplications: applicationTools.getApplications,
-  getGithubRepositories: githubConnectorTools.getGithubRepositories,
-  getServers: getServersTool,
-  getDomains: getDomainsTool,
-  listContainers: listContainersTool,
-};
-
-const suggestionTools = guardToolsForSchemaCompat(rawSuggestionTools);
-
-const SUGGESTION_INSTRUCTIONS = `You are a suggestion engine for Nixopus, a deployment platform. Given a partial user input and optional thread context, return structured suggestions.
+const SUGGESTION_INSTRUCTIONS = `You are a suggestion engine for Nixopus, a deployment platform. Given a partial user input, the user's account entities (provided in the system message), and optional thread context, return structured suggestions.
 
 Your job:
 1. Parse the partial input to understand user intent
 2. If thread context is provided, use it to make suggestions more relevant
-3. Fetch the user's entities (apps, repos, servers, domains, containers) via tools to suggest real resources
+3. Use the provided entity lists (apps, repos, servers, domains, containers) to suggest real resources — do NOT fabricate names
 4. Return a JSON object with a "suggestions" array
 
 Each suggestion has:
@@ -41,8 +25,7 @@ Rules:
 - For very short inputs (2-3 chars), bias toward broad capability discovery
 - For longer inputs with clear intent, bias toward specific entities and actions
 - Bias toward actionable suggestions that show what the platform can do
-- Only suggest entities that actually exist in the user's account
-- Do not fabricate resource names. Every entity must come from a tool call.
+- Only suggest entities from the provided entity lists
 - Respond ONLY with the JSON object. No markdown, no explanation.
 
 Output format:
@@ -54,20 +37,9 @@ export const suggestionAgent = new Agent({
   description: 'Returns structured autocomplete suggestions for the chat input based on partial user input, thread context, and account entities.',
   instructions: SUGGESTION_INSTRUCTIONS,
   model: config.agentLightModel,
-  tools: suggestionTools,
   defaultOptions: agentDefaults({
-    maxSteps: 6,
+    maxSteps: 1,
     modelSettings: { maxOutputTokens: 1500 },
     providerOptions: openrouterProvider(1500, { noReasoning: true }),
   }),
-}) as Agent<
-  'suggestion-agent',
-  typeof suggestionTools,
-  undefined,
-  unknown
-> & { tools: typeof suggestionTools; instructions: string };
-
-Object.assign(suggestionAgent, {
-  tools: suggestionTools,
-  instructions: SUGGESTION_INSTRUCTIONS,
 });
