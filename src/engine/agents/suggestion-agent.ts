@@ -39,7 +39,7 @@ export const suggestionAgent = new Agent({
   model: config.agentLightModel,
   defaultOptions: agentDefaults({
     maxSteps: 1,
-    modelSettings: { maxOutputTokens: 1500 },
-    providerOptions: openrouterProvider(1500, { noReasoning: true }),
+    modelSettings: { maxOutputTokens: 800 },
+    providerOptions: openrouterProvider(800, { noReasoning: true }),
   }),
 });
