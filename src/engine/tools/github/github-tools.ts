@@ -86,9 +86,15 @@ const SENSITIVE_FILE_PATTERNS = [
   /^\.docker\/config\.json$/,
 ];
 
+const DEFAULT_BRANCH_NAMES = new Set(['main', 'master']);
+
 function isSensitiveFile(filePath: string): boolean {
   const basename = filePath.substring(filePath.lastIndexOf('/') + 1);
   return SENSITIVE_FILE_PATTERNS.some((p) => p.test(basename));
+}
+
+export function isDefaultBranch(branch: string): boolean {
+  return DEFAULT_BRANCH_NAMES.has(branch.toLowerCase().trim());
 }
 
 async function tryResolveExistingSha(
@@ -359,17 +365,23 @@ export const githubSearchRepoContentTool = createTool({
 export const githubCreateOrUpdateFileTool = createTool({
   id: 'github_create_or_update_file',
   description:
-    'Create or update a deployment config file in a GitHub repository (Dockerfile, docker-compose.yml, package.json, etc). NEVER use this for .env files, secrets, credentials, or API keys — those must be set via update_application environment variables instead. To update an existing file, you MUST provide the current sha of the file (get it from github_get_repo_file). To create a new file, omit sha.',
+    'Create or update a file in a GitHub repository on a FEATURE BRANCH (never main/master). You MUST create a branch first with github_create_branch, then target that branch here. After writing, open a PR with github_create_pull_request. NEVER use this for .env files, secrets, credentials, or API keys — use update_application for env vars instead. To update an existing file, provide the current sha (get it from github_get_repo_file). To create a new file, omit sha.',
   inputSchema: z.object({
     ...repoRef,
     path: z.string().describe('File path within the repository (e.g. "frontend/Dockerfile"). Must NOT be a secret or .env file.'),
     content: z.string().describe('The full file content (plain text, will be base64-encoded automatically).'),
     message: z.string().describe('Git commit message for this change.'),
-    branch: z.string().optional().describe('Target branch. Defaults to the repo default branch.'),
+    branch: z.string().describe('Target branch. MUST be a feature branch (e.g. "nixopus/fix-dockerfile"). Writing to main or master is blocked.'),
     sha: z.string().optional().describe('Current blob SHA of the file being replaced. Required when updating an existing file.'),
   }),
   execute: async ({ owner, repo, path, content, message, branch, sha }, ctx) => {
-    logger.info({ owner, repo, path, branch: branch ?? 'repo default', updating: !!sha, contentLen: content.length }, 'create_or_update_file called');
+    logger.info({ owner, repo, path, branch, updating: !!sha, contentLen: content.length }, 'create_or_update_file called');
+
+    if (isDefaultBranch(branch)) {
+      throw new ValidationError(
+        `Refused to write directly to "${branch}". Create a feature branch first with github_create_branch, write to that branch, then open a PR with github_create_pull_request.`,
+      );
+    }
 
     if (isSensitiveFile(path)) {
       throw new ValidationError(
@@ -381,8 +393,7 @@ export const githubCreateOrUpdateFileTool = createTool({
     const resolvedSha = sha ?? await tryResolveExistingSha(token, owner, repo, path, branch);
 
     const encodedContent = Buffer.from(content).toString('base64');
-    const body: Record<string, string> = { message, content: encodedContent };
-    if (branch) body.branch = branch;
+    const body: Record<string, string> = { message, content: encodedContent, branch };
     if (resolvedSha) body.sha = resolvedSha;
 
     const result = await githubFetch<{

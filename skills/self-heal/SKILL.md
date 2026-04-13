@@ -8,7 +8,14 @@ metadata:
 # Self-Heal
 
 ## Flow (max 3 attempts)
-On build_failed: get_deployment_logs → diagnose → write fix → push via branch+PR if needed → redeploy → resume monitoring.
+On build_failed: check [deploy-patterns] for a known fix first → if no match, get_deployment_logs → diagnose → apply fix → redeploy → resume monitoring.
+Known fixes from [deploy-patterns] have cross-org confidence scores. Prefer high-confidence fixes (>70%) before investigating from scratch.
+
+### Applying the fix
+- **S3 sources**: Use write_workspace_files to save the fix — files sync automatically.
+- **GitHub sources**: Do NOT use write_workspace_files (it only writes locally and the fix will not reach the repo). Instead, use the GitHub tools: read_skill("github-workflow") and follow the Fix-via-PR flow (create branch → github_create_or_update_file → open PR → ask user to merge → redeploy).
+
+### Rules
 - Do not stop to ask the user unless the fix is ambiguous or requires credentials you do not have.
 - After each failed attempt, tell the user what broke and what you are trying next.
 - Maximum 3 self-heal attempts.

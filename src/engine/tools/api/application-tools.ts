@@ -104,7 +104,7 @@ const tools = defineToolGroup({
   },
   updateApplication: {
     id: 'update_application',
-    description: '[MUTATING] Update app config. Does NOT redeploy — call redeploy_application after if needed. Required: body.id (app UUID). Only include fields to change: name, port, environment_variables, build_variables, build_pack, dockerfile_path, base_path, domains, pre_run_command, post_run_command, environment, compose_domains [{domain, service_name, port}], force.',
+    description: '[MUTATING] Update app config. Does NOT redeploy — call redeploy_application after if needed. Required: body.id (app UUID). Only include fields to change: name, port, environment_variables, build_variables, build_pack, dockerfile_path, base_path, domains, pre_run_command, post_run_command, environment, compose_domains [{domain, service_name, port}], force. NOTE: branch, source, and repository CANNOT be changed after creation.',
     schema: zUpdateApplicationData,
     sdkFn: updateApplication,
   },

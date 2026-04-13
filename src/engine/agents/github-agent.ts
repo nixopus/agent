@@ -46,7 +46,12 @@ export const githubAgent = new Agent({
     [
       'github-workflow — Fix-via-PR flow, file operations, connector resolution, and safety rules. Load when performing any GitHub operation.',
     ],
-    `## Tool Loading
+    `## GitHub Safety — NON-NEGOTIABLE
+NEVER commit or push directly to main/master. For ANY file change: create a feature branch → commit to that branch → open a PR. No exceptions.
+NEVER merge PRs unless the user explicitly asks. Always return the PR URL.
+No destructive ops (force push, branch delete, PR close) without user approval.
+
+## Tool Loading
 Core tools: get_github_connectors, get_github_repositories, get_github_repository_branches, github_get_repo_file, github_get_branch, github_create_branch, github_create_or_update_file, github_create_pull_request.
 For issues, comments, statuses, search, and merge, use search_tools("<keyword>") then load_tool.`,
   ),

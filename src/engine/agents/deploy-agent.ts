@@ -36,10 +36,24 @@ import {
 } from './shared';
 import { DeployStateProcessor } from './deploy-state-processor';
 import { ToolResultPruner } from './tool-result-pruner';
+import { ContextInjectorProcessor } from './context-injector';
+import { DeployPatternProcessor } from './deploy-pattern-processor';
+import { DeployOutcomeProcessor } from './deploy-outcome-processor';
+import { PatternStore } from './pattern-store';
 import { createRequestWorkspace } from '../workspace-factory';
+import { getDb } from '../../db';
 
+const contextInjector = new ContextInjectorProcessor();
 const deployStateProcessor = new DeployStateProcessor();
 const toolResultPruner = new ToolResultPruner();
+const deployPatternProcessor = new DeployPatternProcessor();
+const deployOutcomeProcessor = new DeployOutcomeProcessor();
+
+if (config.databaseUrl) {
+  const patternStore = new PatternStore(getDb(config.databaseUrl) as any);
+  deployPatternProcessor.setPatternStore(patternStore);
+  deployOutcomeProcessor.setPatternStore(patternStore);
+}
 
 const deployMemory = new Memory({
   options: {
@@ -140,7 +154,8 @@ export const deployAgent = new Agent({
   name: 'Deploy Agent',
   instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
-  inputProcessors: [unicodeNormalizer, deployStateProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
+  inputProcessors: [unicodeNormalizer, contextInjector, deployStateProcessor, deployPatternProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
+  outputProcessors: [deployOutcomeProcessor],
   workspace: createRequestWorkspace,
   tools: { ...deployCoreTools, delegate: delegateTool },
   memory: deployMemory as unknown as MastraMemory,

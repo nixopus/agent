@@ -6,10 +6,10 @@ import { emitToolProgress, type ToolWriter } from '../api/shared';
 export const writeWorkspaceFilesTool = createTool({
   id: 'write_workspace_files',
   description:
-    'Write one or more files to the workspace. Use this to save generated Dockerfiles, docker-compose files, ' +
-    'config files, or any other artifacts. For S3-backed workspaces (source=s3), files are automatically ' +
-    'streamed to the user\'s local editor and synced to S3 for deployment. For GitHub-backed workspaces, ' +
-    'push files to GitHub via github_create_or_update_file after writing.',
+    'Write one or more files to the workspace. ONLY use this for S3-backed workspaces (source=s3), where files ' +
+    'are automatically streamed to the user\'s local editor and synced to S3 for deployment. ' +
+    'For GitHub-backed workspaces, DO NOT use this tool — it only writes locally and changes will NOT reach ' +
+    'the repository. Instead, use github_create_or_update_file on a feature branch via the branch+PR flow.',
   inputSchema: z.object({
     applicationId: z
       .string()

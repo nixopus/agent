@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ExternalServiceError } from '../../../../errors';
+import { ExternalServiceError, ValidationError } from '../../../../errors';
 
 const mockGithubFetch = vi.fn();
 vi.mock('../../../../util/github-client', () => ({
@@ -21,7 +21,7 @@ vi.mock('../../../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), debug: vi.fn(), error: vi.fn(), warn: vi.fn() }),
 }));
 
-import { githubCreateOrUpdateFileTool } from '../github-tools';
+import { githubCreateOrUpdateFileTool, isDefaultBranch } from '../github-tools';
 
 const ctx = { requestContext: new Map([['organizationId', 'org-1']]) };
 
@@ -29,8 +29,18 @@ beforeEach(() => {
   mockGithubFetch.mockReset();
 });
 
+describe('isDefaultBranch', () => {
+  it.each(['main', 'master', 'Main', 'MASTER', ' main '])('returns true for %s', (branch) => {
+    expect(isDefaultBranch(branch)).toBe(true);
+  });
+
+  it.each(['nixopus/fix-dockerfile', 'develop', 'feature/add-ci'])('returns false for %s', (branch) => {
+    expect(isDefaultBranch(branch)).toBe(false);
+  });
+});
+
 describe('github_create_or_update_file', () => {
-  it('succeeds when sha is provided', async () => {
+  it('succeeds on a feature branch with sha provided', async () => {
     mockGithubFetch.mockResolvedValue({
       content: { path: 'Dockerfile', sha: 'new-sha', html_url: 'https://x' },
       commit: { sha: 'commit-1', html_url: 'https://y' },
@@ -43,6 +53,7 @@ describe('github_create_or_update_file', () => {
         path: 'Dockerfile',
         content: 'FROM node',
         message: 'update',
+        branch: 'nixopus/fix-dockerfile',
         sha: 'old-sha',
       },
       ctx as never,
@@ -54,7 +65,7 @@ describe('github_create_or_update_file', () => {
       '/repos/o/r/contents/Dockerfile',
       expect.objectContaining({
         method: 'PUT',
-        body: expect.objectContaining({ sha: 'old-sha' }),
+        body: expect.objectContaining({ sha: 'old-sha', branch: 'nixopus/fix-dockerfile' }),
       }),
     );
     expect(result).toMatchObject({ file_sha: 'new-sha' });
@@ -83,7 +94,7 @@ describe('github_create_or_update_file', () => {
         path: 'Dockerfile',
         content: 'FROM node:20',
         message: 'update',
-        branch: 'main',
+        branch: 'nixopus/fix-dockerfile',
       },
       ctx as never,
     );
@@ -93,7 +104,7 @@ describe('github_create_or_update_file', () => {
       1,
       'mock-token',
       '/repos/o/r/contents/Dockerfile',
-      expect.objectContaining({ query: { ref: 'main' } }),
+      expect.objectContaining({ query: { ref: 'nixopus/fix-dockerfile' } }),
     );
     expect(mockGithubFetch).toHaveBeenNthCalledWith(
       2,
@@ -101,7 +112,7 @@ describe('github_create_or_update_file', () => {
       '/repos/o/r/contents/Dockerfile',
       expect.objectContaining({
         method: 'PUT',
-        body: expect.objectContaining({ sha: 'existing-sha', branch: 'main' }),
+        body: expect.objectContaining({ sha: 'existing-sha', branch: 'nixopus/fix-dockerfile' }),
       }),
     );
     expect(result).toMatchObject({ file_sha: 'new-sha' });
@@ -123,7 +134,7 @@ describe('github_create_or_update_file', () => {
         path: 'Dockerfile',
         content: 'FROM node',
         message: 'add',
-        branch: 'main',
+        branch: 'nixopus/add-dockerfile',
       },
       ctx as never,
     );
@@ -131,7 +142,25 @@ describe('github_create_or_update_file', () => {
     expect(mockGithubFetch).toHaveBeenCalledTimes(2);
     const putCall = mockGithubFetch.mock.calls[1];
     expect(putCall[2].body).not.toHaveProperty('sha');
-    expect(putCall[2].body.branch).toBe('main');
+    expect(putCall[2].body.branch).toBe('nixopus/add-dockerfile');
     expect(result).toMatchObject({ file_sha: 'new-sha' });
+  });
+
+  it('rejects writes to main', async () => {
+    await expect(
+      githubCreateOrUpdateFileTool.execute!(
+        { owner: 'o', repo: 'r', path: 'Dockerfile', content: 'FROM node', message: 'update', branch: 'main' },
+        ctx as never,
+      ),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects writes to master', async () => {
+    await expect(
+      githubCreateOrUpdateFileTool.execute!(
+        { owner: 'o', repo: 'r', path: 'Dockerfile', content: 'FROM node', message: 'update', branch: 'master' },
+        ctx as never,
+      ),
+    ).rejects.toThrow(ValidationError);
   });
 });
