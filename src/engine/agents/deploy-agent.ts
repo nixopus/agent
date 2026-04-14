@@ -4,14 +4,9 @@ import { Memory } from '@mastra/memory';
 import { config } from '../../config';
 import { applicationTools } from '../tools/api/application-tools';
 import { projectTools } from '../tools/api/project-tools';
-import { githubConnectorTools } from '../tools/api/github-connector-tools';
-import { getDomainsTool, generateRandomSubdomainTool, createDomainTool, updateDomainTool } from '../tools/api/domain-tools';
-import { addApplicationDomainTool } from '../tools/api/application-tools';
-import { codebaseTools } from '../tools/codebase/codebase-tools';
+import { generateRandomSubdomainTool } from '../tools/api/domain-tools';
 import { resolveContextTool } from '../tools/api/context-tools';
 import { askUserTool } from '../tools/shared/ask-user-tool';
-import { deployGenTools } from '../tools/deploy/deploy-gen-tools';
-import { githubTools } from '../tools/github/github-tools';
 import { diagnosticAgent } from './diagnostic-agent';
 import { machineAgent } from './machine-agent';
 import { preDeployAgent } from './pre-deploy-agent';
@@ -20,8 +15,7 @@ import { billingAgent } from './billing-agent';
 import { githubAgent } from './github-agent';
 import { infrastructureAgent } from './infrastructure-agent';
 import { delegateTool, registerDelegateAgents } from '../tools/shared/delegate-tool';
-import { nixopusDocsTools } from '../tools/docs/nixopus-docs-tool';
-import { mcpServerTools } from '../tools/api/mcp-server-tools';
+import { rawDeploySearchableTools } from './raw-deploy-searchable-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
@@ -85,51 +79,7 @@ export const rawDeployCoreTools = {
   askUser: askUserTool,
 };
 
-export const rawDeploySearchableTools = {
-  getGithubConnectors: githubConnectorTools.getGithubConnectors,
-  getGithubRepositories: githubConnectorTools.getGithubRepositories,
-  analyzeRepository: codebaseTools.analyzeRepository,
-  prepareCodebase: codebaseTools.prepareCodebase,
-  loadLocalWorkspace: codebaseTools.loadLocalWorkspace,
-  writeWorkspaceFiles: deployGenTools.writeWorkspaceFiles,
-  getDomains: getDomainsTool,
-  addApplicationDomain: addApplicationDomainTool,
-  updateApplication: applicationTools.updateApplication,
-  updateApplicationLabels: applicationTools.updateApplicationLabels,
-  restartDeployment: applicationTools.restartDeployment,
-  rollbackDeployment: applicationTools.rollbackDeployment,
-  redeployApplication: applicationTools.redeployApplication,
-  recoverApplication: applicationTools.recoverApplication,
-  deleteApplication: applicationTools.deleteApplication,
-  previewCompose: applicationTools.previewCompose,
-  getComposeServices: applicationTools.getComposeServices,
-  duplicateProject: projectTools.duplicateProject,
-  getProjectFamily: projectTools.getProjectFamily,
-  getEnvironmentsInFamily: projectTools.getEnvironmentsInFamily,
-  addProjectToFamily: projectTools.addProjectToFamily,
-  createGithubConnector: githubConnectorTools.createGithubConnector,
-  updateGithubConnector: githubConnectorTools.updateGithubConnector,
-  deleteGithubConnector: githubConnectorTools.deleteGithubConnector,
-  getGithubRepositoryBranches: githubConnectorTools.getGithubRepositoryBranches,
-  githubGetRepoFile: githubTools.githubGetRepoFile,
-  githubGetBranch: githubTools.githubGetBranch,
-  githubCreateBranch: githubTools.githubCreateBranch,
-  githubCreateOrUpdateFile: githubTools.githubCreateOrUpdateFile,
-  githubCreatePullRequest: githubTools.githubCreatePullRequest,
-  createDomain: createDomainTool,
-  updateDomain: updateDomainTool,
-  fetchNixopusDocsIndex: nixopusDocsTools.fetchNixopusDocsIndex,
-  fetchNixopusDocsPage: nixopusDocsTools.fetchNixopusDocsPage,
-  listMcpProviderCatalog: mcpServerTools.listMcpProviderCatalog,
-  listOrgMcpServers: mcpServerTools.listOrgMcpServers,
-  addMcpServer: mcpServerTools.addMcpServer,
-  updateMcpServer: mcpServerTools.updateMcpServer,
-  deleteMcpServer: mcpServerTools.deleteMcpServer,
-  testMcpServerConnection: mcpServerTools.testMcpServerConnection,
-  discoverMcpTools: mcpServerTools.discoverMcpTools,
-  listEnabledMcpServers: mcpServerTools.listEnabledMcpServers,
-  callMcpTool: mcpServerTools.callMcpTool,
-};
+export { rawDeploySearchableTools };
 
 const deployCoreTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeployCoreTools))));
 const deploySearchableTools = withToonOutput(withCompactOutput(withSourceGuard(guardToolsForSchemaCompat(rawDeploySearchableTools))));

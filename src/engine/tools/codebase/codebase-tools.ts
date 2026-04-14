@@ -118,9 +118,11 @@ export const prepareCodebaseTool = createTool({
 });
 
 import { loadLocalWorkspaceTool } from './local-workspace-tool';
+import { loadRemoteRepositoryTool } from './import-remote-repository-tool';
 
 export const codebaseTools = {
   analyzeRepository: analyzeRepositoryTool,
   prepareCodebase: prepareCodebaseTool,
   loadLocalWorkspace: loadLocalWorkspaceTool,
+  loadRemoteRepository: loadRemoteRepositoryTool,
 };

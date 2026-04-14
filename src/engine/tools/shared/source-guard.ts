@@ -4,44 +4,51 @@ import { createLogger } from '../../../logger';
 
 const logger = createLogger('source-guard');
 
-const S3_BLOCKED_TOOLS = new Map<string, (syncTarget: string) => string>([
-  [
-    'get_github_connectors',
-    (id) =>
-      `Not available for local workspaces. The codebase is synced via the editor. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
-  [
-    'getGithubConnectors',
-    (id) =>
-      `Not available for local workspaces. The codebase is synced via the editor. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
-  [
-    'get_github_repositories',
-    (id) =>
-      `Not available for local workspaces. The codebase is synced via the editor. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
-  [
-    'getGithubRepositories',
-    (id) =>
-      `Not available for local workspaces. The codebase is synced via the editor. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
-  [
-    'analyze_repository',
-    (id) =>
-      `Not available for local workspaces. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
-  [
-    'analyzeRepository',
-    (id) =>
-      `Not available for local workspaces. ` +
-      `Call load_local_workspace with applicationId="${id}" to load the codebase instead.`,
-  ],
+type WorkspaceBackedSource = 's3' | 'git_url';
+
+function blockedGithubConnectorToolMessage(workspaceSource: WorkspaceBackedSource): string {
+  if (workspaceSource === 'git_url') {
+    return (
+      'This deployment is currently using source code from a direct repository link, so GitHub connection actions are unavailable right now. ' +
+      'Continue with the current source, or start a new deployment using your connected GitHub repositories.'
+    );
+  }
+  return (
+    'This deployment is currently using synced source files, so GitHub connection actions are unavailable right now. ' +
+    'Continue with the current source, or start a new deployment using your connected GitHub repositories.'
+  );
+}
+
+function blockedAnalyzeRepositoryMessage(workspaceSource: WorkspaceBackedSource): string {
+  if (workspaceSource === 'git_url') {
+    return (
+      'A repository source is already loaded from a direct link for this deployment. ' +
+      'Continue with the current source instead of starting a separate repository analysis.'
+    );
+  }
+  return (
+    'Source files are already loaded for this deployment. ' +
+    'Continue with the current source instead of starting a separate repository analysis.'
+  );
+}
+
+const BLOCKED_GITHUB_TOOLS = new Set([
+  'get_github_connectors',
+  'getGithubConnectors',
+  'get_github_repositories',
+  'getGithubRepositories',
+  'get_github_repository_branches',
+  'getGithubRepositoryBranches',
 ]);
+
+const BLOCKED_ANALYZE_TOOLS = new Set([
+  'analyze_repository',
+  'analyzeRepository',
+]);
+
+function isBlockedGithubTool(toolId: string): boolean {
+  return BLOCKED_GITHUB_TOOLS.has(toolId) || /^github_[a-z0-9_]+$/i.test(toolId) || /^github[A-Z]/.test(toolId);
+}
 
 const S3_CREATE_PROJECT_TOOLS = new Set([
   'create_project',
@@ -80,8 +87,14 @@ function getReqCtx(ctx: unknown): RequestContext | undefined {
   return (ctx as ToolCtx)?.requestContext;
 }
 
-function isS3(reqCtx: RequestContext | undefined): boolean {
-  return reqCtx?.get?.('workspaceSource') === 's3';
+function workspaceBackedSource(reqCtx: RequestContext | undefined): WorkspaceBackedSource | undefined {
+  const source = reqCtx?.get?.('workspaceSource');
+  if (source === 's3' || source === 'git_url') return source;
+  return undefined;
+}
+
+function isWorkspaceBackedSource(reqCtx: RequestContext | undefined): boolean {
+  return workspaceBackedSource(reqCtx) !== undefined;
 }
 
 function syncTarget(reqCtx: RequestContext | undefined): string {
@@ -141,11 +154,20 @@ export function isWrappable(tool: unknown): tool is Record<string, unknown> & { 
 type ExecuteFn = (input: unknown, ctx: unknown) => Promise<unknown>;
 
 function wrapExecute(toolId: string, origExecute: ExecuteFn): ExecuteFn | null {
-  const blockedMessageFn = S3_BLOCKED_TOOLS.get(toolId);
-  if (blockedMessageFn) {
+  if (BLOCKED_ANALYZE_TOOLS.has(toolId)) {
     return async (input, ctx) => {
       const reqCtx = getReqCtx(ctx);
-      if (isS3(reqCtx)) return { error: blockedMessageFn(syncTarget(reqCtx)) };
+      const backed = workspaceBackedSource(reqCtx);
+      if (backed) return { error: blockedAnalyzeRepositoryMessage(backed) };
+      return origExecute(input, ctx);
+    };
+  }
+
+  if (isBlockedGithubTool(toolId)) {
+    return async (input, ctx) => {
+      const reqCtx = getReqCtx(ctx);
+      const backed = workspaceBackedSource(reqCtx);
+      if (backed) return { error: blockedGithubConnectorToolMessage(backed) };
       return origExecute(input, ctx);
     };
   }
@@ -154,10 +176,10 @@ function wrapExecute(toolId: string, origExecute: ExecuteFn): ExecuteFn | null {
 
   return async (input, ctx) => {
     const reqCtx = getReqCtx(ctx);
-    const s3 = isS3(reqCtx);
-    if (s3) stampS3Fields(input as Record<string, unknown>);
+    const workspaceBacked = isWorkspaceBackedSource(reqCtx);
+    if (workspaceBacked) stampS3Fields(input as Record<string, unknown>);
     const resultData = await origExecute(input, ctx);
-    if (s3) await handlePostCreate(resultData, ctx, reqCtx);
+    if (workspaceBacked) await handlePostCreate(resultData, ctx, reqCtx);
     return resultData;
   };
 }
