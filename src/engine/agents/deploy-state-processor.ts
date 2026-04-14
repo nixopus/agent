@@ -126,11 +126,12 @@ function parseWorkspaceContext(messages: MastraDBMessage[]): WorkspaceContext {
     if (!match) continue;
 
     const block = match[1];
-    const sourceMatch = block.match(/source=(\S+)/i);
+    // Stop at comma/whitespace/] so comma-delimited blocks parse the same as space/newline-separated.
+    const sourceMatch = block.match(/source=\s*([^,\s\]]+)/i);
     const appIdMatch = block.match(/applicationId=([0-9a-f-]{36})/i);
     const wsIdMatch = block.match(/workspaceId=([0-9a-f-]{36})/i);
     const syncTargetMatch = block.match(/syncTarget=([0-9a-f-]{36})/i);
-    const branchMatch = block.match(/branch=(\S+)/i);
+    const branchMatch = block.match(/branch=\s*([^,\s\]]+)/i);
 
     return {
       source: sourceMatch?.[1],
