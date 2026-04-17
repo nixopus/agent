@@ -293,6 +293,48 @@ describe('importRemoteRepository', () => {
     ).rejects.toThrow('Unable to clone repository: network failure');
   });
 
+  it("reports a dedicated error when git binary is missing (ENOENT)", async () => {
+    mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
+      const { cb } = splitExecFileArgs(allArgs);
+      const err = new Error('spawn git ENOENT') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      cb(err);
+    });
+    await expect(
+      importRemoteRepository({
+        repoUrl: 'https://github.com/acme/api.git',
+      }),
+    ).rejects.toThrow("'git' binary not found in runtime environment");
+  });
+
+  it('maps TLS certificate problems to a dedicated message and surfaces stderr', async () => {
+    mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
+      const { cb } = splitExecFileArgs(allArgs);
+      cb(
+        new Error('Command failed: git clone …'),
+        '',
+        'fatal: unable to access https://github.com/acme/api.git/: SSL certificate problem: unable to get local issuer certificate',
+      );
+    });
+    await expect(
+      importRemoteRepository({
+        repoUrl: 'https://github.com/acme/api.git',
+      }),
+    ).rejects.toThrow(/TLS\/CA certificates missing.*unable to get local issuer certificate/);
+  });
+
+  it('includes raw git stderr in the generic clone failure message', async () => {
+    mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
+      const { cb } = splitExecFileArgs(allArgs);
+      cb(new Error('Command failed: git clone'), '', 'fatal: unexpected disconnect from remote peer');
+    });
+    await expect(
+      importRemoteRepository({
+        repoUrl: 'https://github.com/acme/api.git',
+      }),
+    ).rejects.toThrow(/Unable to clone repository\..*unexpected disconnect from remote peer/);
+  });
+
   it('maps missing remote branch to a user-safe message', async () => {
     mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
       const { cb } = splitExecFileArgs(allArgs);

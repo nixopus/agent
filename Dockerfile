@@ -12,7 +12,7 @@ COPY . .
 RUN yarn build
 
 FROM node:22-alpine AS runner
-RUN apk add --no-cache wget
+RUN apk add --no-cache wget git ca-certificates openssh-client
 WORKDIR /app
 
 ENV NODE_ENV=production

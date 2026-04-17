@@ -25,14 +25,21 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 type RequestContext = { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void };
 type ToolContext = { workspace?: Workspace; requestContext?: RequestContext; writer?: ToolWriter };
 
+type GitExecError = NodeJS.ErrnoException & { stderr?: string };
+
 async function runGit(
   args: string[],
   options?: { timeout?: number },
 ): Promise<{ stdout: string; stderr: string }> {
   return await new Promise((resolve, reject) => {
     childProcess.execFile('git', args, options ?? {}, (err, stdout, stderr) => {
-      if (err) reject(err);
-      else resolve({ stdout: String(stdout), stderr: String(stderr) });
+      if (err) {
+        const enriched = err as GitExecError;
+        enriched.stderr = String(stderr ?? '');
+        reject(enriched);
+      } else {
+        resolve({ stdout: String(stdout), stderr: String(stderr) });
+      }
     });
   });
 }
@@ -100,17 +107,30 @@ async function collectFiles(
 }
 
 function mapCloneError(err: unknown): Error {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/remote branch .* not found/i.test(msg)) {
-    return new Error('Unable to clone repository: branch not found.');
+  const e = (err ?? {}) as GitExecError;
+  const baseMsg = err instanceof Error ? err.message : String(err);
+  const stderr = (e.stderr ?? '').trim();
+  const detail = stderr ? `${baseMsg} | stderr: ${stderr}` : baseMsg;
+  const haystack = `${baseMsg}\n${stderr}`;
+
+  if (e.code === 'ENOENT' || /spawn git ENOENT/i.test(haystack)) {
+    return new Error(
+      `Unable to clone repository: 'git' binary not found in runtime environment. (${detail})`,
+    );
   }
-  if (/could not resolve host|timed out|network is unreachable|ECONNRESET|ETIMEDOUT/i.test(msg)) {
-    return new Error('Unable to clone repository: network failure.');
+  if (/remote branch .* not found/i.test(haystack)) {
+    return new Error(`Unable to clone repository: branch not found. (${detail})`);
   }
-  if (/repository not found|authentication failed|access denied|403/i.test(msg)) {
-    return new Error('Unable to clone repository: not found or private.');
+  if (/could not resolve host|timed out|network is unreachable|ECONNRESET|ETIMEDOUT/i.test(haystack)) {
+    return new Error(`Unable to clone repository: network failure. (${detail})`);
   }
-  return new Error('Unable to clone repository.');
+  if (/repository not found|authentication failed|access denied|403/i.test(haystack)) {
+    return new Error(`Unable to clone repository: not found or private. (${detail})`);
+  }
+  if (/ssl certificate problem|unable to get local issuer|self.signed certificate|certificate verify failed/i.test(haystack)) {
+    return new Error(`Unable to clone repository: TLS/CA certificates missing. (${detail})`);
+  }
+  return new Error(`Unable to clone repository. (${detail})`);
 }
 
 function mapPostCloneError(err: unknown): Error {
