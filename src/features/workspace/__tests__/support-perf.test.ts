@@ -91,19 +91,27 @@ describe('support perf — isSkippedPath throughput', () => {
     expect(elapsed).toBeLessThan(500);
   });
 
-  it('lock files detected at any depth — 100K calls in under 300ms', () => {
+  it('lock files are NOT skipped — needed by `npm ci` / `bundle install --deployment` / `cargo install --locked` etc.', () => {
     const lockPaths = [
+      'package-lock.json',
+      'pnpm-lock.yaml',
+      'yarn.lock',
       'composer.lock',
       'packages/web/shrinkwrap.lock',
       'deep/nested/Gemfile.lock',
+      'Cargo.lock',
+      'poetry.lock',
+      'Pipfile.lock',
     ];
-    let hits = 0;
+    for (const p of lockPaths) {
+      expect(isSkippedPath(p)).toBe(false);
+    }
+
     const start = performance.now();
     for (let i = 0; i < 100_000; i++) {
-      if (isSkippedPath(lockPaths[i % 3])) hits++;
+      isSkippedPath(lockPaths[i % lockPaths.length]);
     }
     const elapsed = performance.now() - start;
-    expect(hits).toBe(100_000);
     expect(elapsed).toBeLessThan(300);
   });
 });

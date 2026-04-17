@@ -14,7 +14,21 @@ import {
   type FetchedFile,
 } from '../../../features/workspace/support';
 import { isPublicGitUrl, toCloneSafeHttpsUrl } from './git-url';
-import { isS3Configured, syncFiles as syncFilesToS3 } from '../../../features/workspace/s3-store';
+import {
+  isS3Configured,
+  syncFiles as syncFilesToS3,
+  prefixHas,
+  writeFilesToPrefix,
+  copyPrefix,
+  readFilesFromPrefix,
+} from '../../../features/workspace/s3-store';
+import {
+  CACHE_MARKER,
+  cachePrefixFor,
+  matchSampleRepo,
+  resolveRemoteSha,
+  type SampleRepoMatch,
+} from './sample-repo-cache';
 import { createLogger } from '../../../logger';
 
 const importLogger = createLogger('load-remote-repository');
@@ -95,12 +109,28 @@ async function collectFiles(
     }
 
     if (!info.isFile()) continue;
-    if (isSkippedPath(rel) || isBinaryPath(rel)) continue;
+    if (isSkippedPath(rel)) continue;
     if (info.size > MAX_FILE_BYTES) continue;
+
+    if (out.length >= limits.maxFiles) break;
+
+    if (isBinaryPath(rel)) {
+      const buf = await readFile(full);
+      const contentBytes = buf.length;
+      if (acc.totalSize + contentBytes > limits.maxTotalSize) break;
+      acc.totalSize += contentBytes;
+      out.push({
+        path: rel,
+        content: buf.toString('base64'),
+        language: languageFromPath(rel),
+        encoding: 'base64',
+      });
+      continue;
+    }
+
     const content = await readFile(full, 'utf8');
     if (content.includes('\0')) continue;
 
-    if (out.length >= limits.maxFiles) break;
     const contentBytes = Buffer.byteLength(content, 'utf8');
     if (acc.totalSize + contentBytes > limits.maxTotalSize) break;
 
@@ -214,7 +244,8 @@ async function writeFetchedFilesToWorkspace(
   }
 
   for (const file of files) {
-    await fs.writeFile(`${root}/${file.path}`, file.content);
+    const payload = file.encoding === 'base64' ? Buffer.from(file.content, 'base64') : file.content;
+    await fs.writeFile(`${root}/${file.path}`, payload);
   }
 }
 
@@ -231,6 +262,7 @@ async function populateWorkspaceFromFetched(
   }
 
   for (const file of files) {
+    if (file.encoding === 'base64') continue;
     await workspace.index(`${root}/${file.path}`, file.content, {
       metadata: { language: file.language },
     });
@@ -279,16 +311,125 @@ async function syncFetchedFilesToS3(
   try {
     const synced = await syncFilesToS3(
       applicationId,
-      files.map((f) => ({ path: f.path, content: f.content })),
+      files.map((f) => ({
+        path: f.path,
+        content: f.content,
+        ...(f.encoding && { encoding: f.encoding }),
+      })),
       true,
     );
-    importLogger.info({ applicationId, synced }, 'Imported repository synced to S3 workspace');
+    importLogger.info({ applicationId, synced }, 'Imported repository synced to workspace');
     return { attempted: true, synced };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     importLogger.warn({ applicationId, err }, 'Failed to sync imported repository to S3');
     return { attempted: true, error: message };
   }
+}
+
+interface CacheOutcome {
+  source: 'hit' | 'miss' | 'warmed' | 'unavailable';
+  sha?: string;
+  cachePrefix?: string;
+  filesCopied?: number;
+  warnings: string[];
+}
+
+interface CacheResult {
+  files: FetchedFile[];
+  commit: string;
+  branch: string;
+  outcome: CacheOutcome;
+}
+
+async function importViaCache(
+  cloneRepoUrl: string,
+  applicationId: string | undefined,
+  match: SampleRepoMatch,
+): Promise<CacheResult | null> {
+  if (!isS3Configured() || !isUuid(applicationId)) return null;
+
+  const sha = await resolveRemoteSha(cloneRepoUrl, match.branch);
+  if (!sha) {
+    importLogger.warn({ cloneRepoUrl, branch: match.branch }, 'cache: ls-remote failed, falling back to clone');
+    return null;
+  }
+
+  const cachePrefix = cachePrefixFor(match, sha);
+  const warnings: string[] = [];
+  const targetPrefix = `workspaces/${applicationId}/`;
+
+  const cacheReady = await prefixHas(cachePrefix, CACHE_MARKER);
+
+  if (cacheReady) {
+    const [files, copyResult] = await Promise.all([
+      readFilesFromPrefix(cachePrefix),
+      copyPrefix(cachePrefix, targetPrefix),
+    ]);
+
+    if (copyResult.failed.length > 0) {
+      warnings.push(`copy from cache failed for ${copyResult.failed.length} file(s)`);
+    }
+    if (files.length === 0) {
+      importLogger.warn({ cachePrefix }, 'cache: marker found but prefix empty, falling back to clone');
+      return null;
+    }
+
+    importLogger.info(
+      { cachePrefix, applicationId, copied: copyResult.copied, files: files.length },
+      'cache: hit, materialised into workspace prefix',
+    );
+
+    return {
+      files,
+      commit: sha.slice(0, 7),
+      branch: match.branch,
+      outcome: { source: 'hit', sha, cachePrefix, filesCopied: copyResult.copied, warnings },
+    };
+  }
+
+  const cloned = await importRemoteRepository({ repoUrl: cloneRepoUrl, branch: match.branch });
+
+  const writeResult = await writeFilesToPrefix(
+    cachePrefix,
+    cloned.files.map((f) => ({
+      path: f.path,
+      content: f.content,
+      ...(f.encoding && { encoding: f.encoding }),
+    })),
+    {
+      fullSync: true,
+      marker: { key: CACHE_MARKER, content: JSON.stringify({ sha, files: cloned.fileCount, at: Date.now() }) },
+    },
+  );
+
+  if (writeResult.failed.length > 0) {
+    warnings.push(
+      `cache warm partial: ${writeResult.failed.length} file(s) failed; marker not written, will re-warm next time`,
+    );
+    importLogger.warn(
+      { cachePrefix, failed: writeResult.failed.length, sample: writeResult.failed.slice(0, 3) },
+      'cache: warm partial, marker withheld',
+    );
+  }
+
+  const perAppSync = await syncFetchedFilesToS3(applicationId, cloned.files);
+  if (perAppSync.error) {
+    warnings.push(`per-app workspace sync failed: ${perAppSync.error}`);
+  }
+
+  return {
+    files: cloned.files,
+    commit: cloned.commit,
+    branch: cloned.branch,
+    outcome: {
+      source: writeResult.failed.length === 0 ? 'warmed' : 'miss',
+      sha,
+      cachePrefix,
+      filesCopied: perAppSync.synced,
+      warnings,
+    },
+  };
 }
 
 async function emitImportedFiles(
@@ -299,6 +440,7 @@ async function emitImportedFiles(
   if (!writer?.custom) return;
 
   for (const file of files) {
+    if (file.encoding === 'base64') continue;
     await writer.custom({
       type: 'data-write-file',
       data: { applicationId, path: file.path, content: file.content },
@@ -337,9 +479,31 @@ export const loadRemoteRepositoryTool = createTool({
       };
     }
 
-    let imported: Awaited<ReturnType<typeof importRemoteRepository>>;
+    let imported: {
+      files: FetchedFile[];
+      fileCount: number;
+      commit: string;
+      branch: string;
+    };
+    let cacheOutcome: CacheOutcome | undefined;
+
+    const sampleMatch = matchSampleRepo(cloneRepoUrl, branch);
+
     try {
-      imported = await importRemoteRepository({ repoUrl: cloneRepoUrl, branch });
+      const cached = sampleMatch ? await importViaCache(cloneRepoUrl, applicationId, sampleMatch) : null;
+
+      if (cached) {
+        imported = {
+          files: cached.files,
+          fileCount: cached.files.length,
+          commit: cached.commit,
+          branch: cached.branch,
+        };
+        cacheOutcome = cached.outcome;
+      } else {
+        const cloned = await importRemoteRepository({ repoUrl: cloneRepoUrl, branch });
+        imported = cloned;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to import remote repository.';
       return { error: message, fileCount: 0 };
@@ -365,7 +529,17 @@ export const loadRemoteRepositoryTool = createTool({
 
     await emitImportedFiles(toolCtx?.writer, syncTarget, imported.files);
 
-    const s3Sync = await syncFetchedFilesToS3(applicationId, imported.files);
+    const s3Sync = cacheOutcome
+      ? {
+          attempted: true,
+          ...(cacheOutcome.filesCopied !== undefined && { synced: cacheOutcome.filesCopied }),
+          ...(cacheOutcome.warnings.length > 0 && { error: cacheOutcome.warnings.join('; ') }),
+        }
+      : await syncFetchedFilesToS3(applicationId, imported.files);
+
+    const cacheNote = cacheOutcome
+      ? ` [cache:${cacheOutcome.source} ${cacheOutcome.sha?.slice(0, 7) ?? ''}]`
+      : '';
 
     return {
       workspaceRoot,
@@ -373,11 +547,12 @@ export const loadRemoteRepositoryTool = createTool({
       commit: imported.commit,
       branch: imported.branch,
       s3Sync,
+      ...(cacheOutcome && { cache: cacheOutcome }),
       message: s3Sync.attempted && s3Sync.synced
-        ? `Repository source loaded successfully (${s3Sync.synced} files synced to S3 workspace ${applicationId}). Continuing deployment with this codebase.`
+        ? `Repository source loaded successfully (${s3Sync.synced} files synced to workspace)${cacheNote}. Continuing deployment with this codebase.`
         : s3Sync.attempted && s3Sync.error
-          ? `Repository source loaded but S3 sync failed: ${s3Sync.error}. Deploy backend may report no source files.`
-          : 'Repository source loaded successfully. Continuing deployment with this codebase.',
+          ? `Repository source loaded but workspace sync failed: ${s3Sync.error}. Deployment may report no source files.`
+          : `Repository source loaded successfully${cacheNote}. Continuing deployment with this codebase.`,
     };
   },
 });

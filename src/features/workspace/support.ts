@@ -7,6 +7,7 @@ export interface FetchedFile {
   path: string;
   content: string;
   language: string;
+  encoding?: 'base64';
 }
 
 interface ConnectorData {
@@ -49,9 +50,7 @@ const SKIP_DIRS = new Set([
   'coverage', '__pycache__', '.venv', 'venv', '.turbo', '.cache', 'vendor',
 ]);
 
-const SKIP_FILES = new Set([
-  'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock',
-]);
+const SKIP_FILES = new Set<string>([]);
 
 const MAX_FILE_SIZE = 512 * 1024;
 const MAX_TOTAL_SIZE = 50 * 1024 * 1024;
@@ -102,8 +101,7 @@ export function isSkippedPath(filePath: string): boolean {
     idx = filePath.indexOf('/', start);
   }
   const fileName = filePath.substring(start);
-  if (SKIP_FILES.has(fileName)) return true;
-  return fileName.endsWith('.lock');
+  return SKIP_FILES.has(fileName);
 }
 
 export function languageFromPath(filePath: string): string {

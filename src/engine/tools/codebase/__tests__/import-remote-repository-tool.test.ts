@@ -9,10 +9,38 @@ type SyncFilesArgs = [
   deletedPaths?: string[],
 ];
 
-const { mockExecFile, mockIsS3Configured, mockSyncFiles } = vi.hoisted(() => ({
+type WriteFailure = { path: string; error: string };
+type WriteFilesResult = { uploaded: number; failed: WriteFailure[] };
+type WriteFilesArgs = [
+  prefix: string,
+  files: Array<{ path: string; content: string; encoding?: 'base64' }>,
+  opts?: { fullSync?: boolean; marker?: { key: string; content: string } },
+];
+type CopyPrefixResult = { copied: number; failed: WriteFailure[] };
+type FetchedFileLite = { path: string; content: string; language?: string; encoding?: 'base64' };
+
+const {
+  mockExecFile,
+  mockIsS3Configured,
+  mockSyncFiles,
+  mockPrefixHas,
+  mockWriteFilesToPrefix,
+  mockCopyPrefix,
+  mockReadFilesFromPrefix,
+} = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
   mockIsS3Configured: vi.fn<() => boolean>(() => false),
   mockSyncFiles: vi.fn<(...args: SyncFilesArgs) => Promise<number>>(async () => 0),
+  mockPrefixHas: vi.fn<(prefix: string, key: string) => Promise<boolean>>(async () => false),
+  mockWriteFilesToPrefix: vi.fn<(...args: WriteFilesArgs) => Promise<WriteFilesResult>>(async () => ({
+    uploaded: 0,
+    failed: [],
+  })),
+  mockCopyPrefix: vi.fn<(from: string, to: string) => Promise<CopyPrefixResult>>(async () => ({
+    copied: 0,
+    failed: [],
+  })),
+  mockReadFilesFromPrefix: vi.fn<(prefix: string) => Promise<FetchedFileLite[]>>(async () => []),
 }));
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -26,6 +54,10 @@ vi.mock('node:child_process', async (importOriginal) => {
 vi.mock('../../../../features/workspace/s3-store', () => ({
   isS3Configured: () => mockIsS3Configured(),
   syncFiles: (...args: SyncFilesArgs) => mockSyncFiles(...args),
+  prefixHas: (...args: [string, string]) => mockPrefixHas(...args),
+  writeFilesToPrefix: (...args: WriteFilesArgs) => mockWriteFilesToPrefix(...args),
+  copyPrefix: (...args: [string, string]) => mockCopyPrefix(...args),
+  readFilesFromPrefix: (prefix: string) => mockReadFilesFromPrefix(prefix),
 }));
 
 function splitExecFileArgs(allArgs: unknown[]): {
@@ -52,6 +84,14 @@ beforeEach(() => {
   mockIsS3Configured.mockReturnValue(false);
   mockSyncFiles.mockReset();
   mockSyncFiles.mockResolvedValue(0);
+  mockPrefixHas.mockReset();
+  mockPrefixHas.mockResolvedValue(false);
+  mockWriteFilesToPrefix.mockReset();
+  mockWriteFilesToPrefix.mockResolvedValue({ uploaded: 0, failed: [] });
+  mockCopyPrefix.mockReset();
+  mockCopyPrefix.mockResolvedValue({ copied: 0, failed: [] });
+  mockReadFilesFromPrefix.mockReset();
+  mockReadFilesFromPrefix.mockResolvedValue([]);
 });
 
 function makeRequestContext(initial: Record<string, unknown> = {}) {
@@ -579,7 +619,7 @@ describe('remote repository tool surface', () => {
         s3Sync: { attempted: true, synced: 2 },
       }),
     );
-    expect((result as { message: string }).message).toContain('synced to S3 workspace');
+    expect((result as { message: string }).message).toContain('synced to workspace');
   });
 
   it('skips S3 sync when S3 is not configured', async () => {
@@ -671,6 +711,293 @@ describe('remote repository tool surface', () => {
         s3Sync: { attempted: true, error: 'S3 timeout' },
       }),
     );
-    expect((result as { message: string }).message).toContain('S3 sync failed');
+    expect((result as { message: string }).message).toContain('workspace sync failed');
+  });
+
+  describe('sample-repo cache (nixopus/sample-app @ main)', () => {
+    const SAMPLE_URL = 'https://github.com/nixopus/sample-app.git';
+    const APP_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const SHA = 'a'.repeat(40);
+    const EXPECTED_PREFIX = `cache/samples/v3/nixopus/sample-app/${SHA}/`;
+
+    it('cache hit: skips clone, copies cache prefix into per-app prefix', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockPrefixHas.mockResolvedValue(true);
+      mockReadFilesFromPrefix.mockResolvedValue([
+        { path: 'README.md', content: '# sample\n', language: 'markdown' },
+        { path: 'src/app.ts', content: 'export const x = 1;\n', language: 'typescript' },
+      ]);
+      mockCopyPrefix.mockResolvedValue({ copied: 2, failed: [] });
+
+      mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
+        const { argv, cb } = splitExecFileArgs(allArgs);
+        expect(argv[0]).toBe('ls-remote');
+        expect(argv).toContain('refs/heads/main');
+        cb(null, `${SHA}\trefs/heads/main\n`, '');
+      });
+
+      const result = await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      expect(mockExecFile).toHaveBeenCalledTimes(1);
+      expect(mockPrefixHas).toHaveBeenCalledWith(EXPECTED_PREFIX, '.cache-complete');
+      expect(mockCopyPrefix).toHaveBeenCalledWith(EXPECTED_PREFIX, `workspaces/${APP_ID}/`);
+      expect(mockWriteFilesToPrefix).not.toHaveBeenCalled();
+      expect(mockSyncFiles).not.toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({
+          fileCount: 2,
+          branch: 'main',
+          cache: expect.objectContaining({ source: 'hit', sha: SHA, filesCopied: 2 }),
+        }),
+      );
+    });
+
+    it('cache miss: clones, warms cache with marker, then per-app sync', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockPrefixHas.mockResolvedValue(false);
+      mockWriteFilesToPrefix.mockResolvedValue({ uploaded: 2, failed: [] });
+      mockSyncFiles.mockResolvedValue(2);
+
+      mockExecFile
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          expect(argv[0]).toBe('ls-remote');
+          cb(null, `${SHA}\trefs/heads/main\n`, '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          const dest = argv[argv.length - 1] as string;
+          writeFileSync(join(dest, 'README.md'), '# sample\n');
+          mkdirSync(join(dest, 'src'), { recursive: true });
+          writeFileSync(join(dest, 'src', 'app.ts'), 'export const x = 1;\n');
+          cb(null, '', '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, 'abc123\n', '');
+        });
+
+      const result = await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      expect(mockExecFile).toHaveBeenCalledTimes(3);
+      expect(mockPrefixHas).toHaveBeenCalledWith(EXPECTED_PREFIX, '.cache-complete');
+      const [warmPrefix, , warmOpts] = mockWriteFilesToPrefix.mock.calls[0]!;
+      expect(warmPrefix).toBe(EXPECTED_PREFIX);
+      expect(warmOpts?.marker?.key).toBe('.cache-complete');
+      expect(warmOpts?.fullSync).toBe(true);
+      expect(mockSyncFiles).toHaveBeenCalledWith(APP_ID, expect.any(Array), true);
+      expect(mockCopyPrefix).not.toHaveBeenCalled();
+      expect(result).toEqual(
+        expect.objectContaining({
+          fileCount: 2,
+          cache: expect.objectContaining({ source: 'warmed', sha: SHA }),
+        }),
+      );
+    });
+
+    it('cache warm partial failure: marker withheld, deploy still proceeds via per-app sync', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockPrefixHas.mockResolvedValue(false);
+      mockWriteFilesToPrefix.mockResolvedValue({
+        uploaded: 1,
+        failed: [{ path: 'src/[id].ts', error: 'InvalidKey' }],
+      });
+      mockSyncFiles.mockResolvedValue(2);
+
+      mockExecFile
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, `${SHA}\trefs/heads/main\n`, '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          const dest = argv[argv.length - 1] as string;
+          writeFileSync(join(dest, 'README.md'), '# sample\n');
+          cb(null, '', '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, 'abc\n', '');
+        });
+
+      const result = await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          cache: expect.objectContaining({
+            source: 'miss',
+            warnings: expect.arrayContaining([expect.stringContaining('cache warm partial')]),
+          }),
+        }),
+      );
+      expect(mockSyncFiles).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to plain clone when ls-remote fails', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockSyncFiles.mockResolvedValue(1);
+
+      mockExecFile
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          expect(argv[0]).toBe('ls-remote');
+          cb(new Error('network down'));
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          const dest = argv[argv.length - 1] as string;
+          writeFileSync(join(dest, 'README.md'), '# fallback\n');
+          cb(null, '', '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, 'abc\n', '');
+        });
+
+      const result = await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      expect(mockPrefixHas).not.toHaveBeenCalled();
+      expect(mockWriteFilesToPrefix).not.toHaveBeenCalled();
+      expect(mockCopyPrefix).not.toHaveBeenCalled();
+      expect(mockSyncFiles).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty('cache');
+    });
+
+    it('cache miss with binary assets: SVG/favicon flow to S3 as base64', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockPrefixHas.mockResolvedValue(false);
+      mockWriteFilesToPrefix.mockResolvedValue({ uploaded: 3, failed: [] });
+      mockSyncFiles.mockResolvedValue(3);
+
+      const svgBytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>', 'utf8');
+      const icoBytes = Buffer.from([0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x10, 0x10, 0x00, 0x00]);
+
+      mockExecFile
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, `${SHA}\trefs/heads/main\n`, '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          const dest = argv[argv.length - 1] as string;
+          writeFileSync(join(dest, 'README.md'), '# sample\n');
+          mkdirSync(join(dest, 'public'), { recursive: true });
+          writeFileSync(join(dest, 'public', 'logo.svg'), svgBytes);
+          mkdirSync(join(dest, 'src', 'app'), { recursive: true });
+          writeFileSync(join(dest, 'src', 'app', 'favicon.ico'), icoBytes);
+          cb(null, '', '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, 'abc123\n', '');
+        });
+
+      const result = await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      const [, cachePayload] = mockWriteFilesToPrefix.mock.calls[0]!;
+      const cacheByPath = new Map(cachePayload.map((f) => [f.path, f]));
+      expect(cacheByPath.get('public/logo.svg')).toMatchObject({
+        encoding: 'base64',
+        content: svgBytes.toString('base64'),
+      });
+      expect(cacheByPath.get('src/app/favicon.ico')).toMatchObject({
+        encoding: 'base64',
+        content: icoBytes.toString('base64'),
+      });
+      expect(cacheByPath.get('README.md')?.encoding).toBeUndefined();
+
+      const [, perAppPayload] = mockSyncFiles.mock.calls[0]!;
+      const perAppByPath = new Map(perAppPayload.map((f) => [f.path, f]));
+      expect(perAppByPath.get('public/logo.svg')).toMatchObject({
+        encoding: 'base64',
+        content: svgBytes.toString('base64'),
+      });
+      expect(perAppByPath.get('src/app/favicon.ico')?.encoding).toBe('base64');
+
+      expect(result).toEqual(expect.objectContaining({ fileCount: 3 }));
+    });
+
+    it('cache hit: readFilesFromPrefix returning base64 binaries are written through to the workspace as raw Buffers', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockPrefixHas.mockResolvedValue(true);
+      const icoBase64 = Buffer.from([0x00, 0x00, 0x01, 0x00]).toString('base64');
+      mockReadFilesFromPrefix.mockResolvedValue([
+        { path: 'README.md', content: '# sample\n', language: 'markdown' },
+        { path: 'src/app/favicon.ico', content: icoBase64, language: 'unknown', encoding: 'base64' },
+      ]);
+      mockCopyPrefix.mockResolvedValue({ copied: 2, failed: [] });
+
+      const fsWriteFile = vi.fn(async () => undefined);
+      const workspace = {
+        status: 'ready',
+        filesystem: {
+          mkdir: vi.fn(async () => undefined),
+          writeFile: fsWriteFile,
+        },
+        index: vi.fn(async () => undefined),
+      };
+
+      mockExecFile.mockImplementationOnce((...allArgs: unknown[]) => {
+        const { cb } = splitExecFileArgs(allArgs);
+        cb(null, `${SHA}\trefs/heads/main\n`, '');
+      });
+
+      await loadRemoteRepositoryTool.execute!(
+        { repoUrl: SAMPLE_URL, branch: 'main', applicationId: APP_ID },
+        { workspace } as unknown as Parameters<NonNullable<typeof loadRemoteRepositoryTool.execute>>[1],
+      );
+
+      const calls = fsWriteFile.mock.calls as unknown as Array<[string, string | Buffer]>;
+      const writtenByPath = new Map(calls.map(([p, c]) => [p, c]));
+      expect(writtenByPath.get(`apps/${APP_ID}/README.md`)).toBe('# sample\n');
+      const ico = writtenByPath.get(`apps/${APP_ID}/src/app/favicon.ico`);
+      expect(Buffer.isBuffer(ico)).toBe(true);
+      expect((ico as Buffer).equals(Buffer.from([0x00, 0x00, 0x01, 0x00]))).toBe(true);
+
+      const indexCalls = workspace.index.mock.calls as unknown as Array<[string, string, unknown]>;
+      const indexedPaths = indexCalls.map((c) => c[0]);
+      expect(indexedPaths).toContain(`apps/${APP_ID}/README.md`);
+      expect(indexedPaths).not.toContain(`apps/${APP_ID}/src/app/favicon.ico`);
+    });
+
+    it('does not engage cache for non-allow-listed repos', async () => {
+      mockIsS3Configured.mockReturnValue(true);
+      mockSyncFiles.mockResolvedValue(1);
+
+      mockExecFile
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { argv, cb } = splitExecFileArgs(allArgs);
+          expect(argv[0]).toBe('clone');
+          const dest = argv[argv.length - 1] as string;
+          writeFileSync(join(dest, 'README.md'), '# other\n');
+          cb(null, '', '');
+        })
+        .mockImplementationOnce((...allArgs: unknown[]) => {
+          const { cb } = splitExecFileArgs(allArgs);
+          cb(null, 'abc\n', '');
+        });
+
+      await loadRemoteRepositoryTool.execute!(
+        { repoUrl: 'https://github.com/acme/other.git', branch: 'main', applicationId: APP_ID },
+        { workspace: undefined },
+      );
+
+      expect(mockPrefixHas).not.toHaveBeenCalled();
+    });
   });
 });
