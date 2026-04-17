@@ -14,6 +14,10 @@ import {
   type FetchedFile,
 } from '../../../features/workspace/support';
 import { isPublicGitUrl, toCloneSafeHttpsUrl } from './git-url';
+import { isS3Configured, syncFiles as syncFilesToS3 } from '../../../features/workspace/s3-store';
+import { createLogger } from '../../../logger';
+
+const importLogger = createLogger('load-remote-repository');
 
 const CLONE_TIMEOUT_MS = 60_000;
 const MAX_FILE_BYTES = 512 * 1024;
@@ -264,6 +268,29 @@ function stampImportRequestContext(args: {
   }
 }
 
+async function syncFetchedFilesToS3(
+  applicationId: string | undefined,
+  files: FetchedFile[],
+): Promise<{ attempted: boolean; synced?: number; error?: string }> {
+  if (!isS3Configured() || !isUuid(applicationId)) {
+    return { attempted: false };
+  }
+
+  try {
+    const synced = await syncFilesToS3(
+      applicationId,
+      files.map((f) => ({ path: f.path, content: f.content })),
+      true,
+    );
+    importLogger.info({ applicationId, synced }, 'Imported repository synced to S3 workspace');
+    return { attempted: true, synced };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    importLogger.warn({ applicationId, err }, 'Failed to sync imported repository to S3');
+    return { attempted: true, error: message };
+  }
+}
+
 async function emitImportedFiles(
   writer: ToolWriter | undefined,
   applicationId: string,
@@ -338,12 +365,19 @@ export const loadRemoteRepositoryTool = createTool({
 
     await emitImportedFiles(toolCtx?.writer, syncTarget, imported.files);
 
+    const s3Sync = await syncFetchedFilesToS3(applicationId, imported.files);
+
     return {
       workspaceRoot,
       fileCount: imported.fileCount,
       commit: imported.commit,
       branch: imported.branch,
-      message: 'Repository source loaded successfully. Continuing deployment with this codebase.',
+      s3Sync,
+      message: s3Sync.attempted && s3Sync.synced
+        ? `Repository source loaded successfully (${s3Sync.synced} files synced to S3 workspace ${applicationId}). Continuing deployment with this codebase.`
+        : s3Sync.attempted && s3Sync.error
+          ? `Repository source loaded but S3 sync failed: ${s3Sync.error}. Deploy backend may report no source files.`
+          : 'Repository source loaded successfully. Continuing deployment with this codebase.',
     };
   },
 });

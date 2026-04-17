@@ -2,8 +2,17 @@ import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockExecFile } = vi.hoisted(() => ({
+type SyncFilesArgs = [
+  applicationId: string,
+  files: Array<{ path: string; content: string; encoding?: 'base64' }>,
+  fullSync: boolean,
+  deletedPaths?: string[],
+];
+
+const { mockExecFile, mockIsS3Configured, mockSyncFiles } = vi.hoisted(() => ({
   mockExecFile: vi.fn(),
+  mockIsS3Configured: vi.fn<() => boolean>(() => false),
+  mockSyncFiles: vi.fn<(...args: SyncFilesArgs) => Promise<number>>(async () => 0),
 }));
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -13,6 +22,11 @@ vi.mock('node:child_process', async (importOriginal) => {
     execFile: (...args: unknown[]) => mockExecFile(...args),
   };
 });
+
+vi.mock('../../../../features/workspace/s3-store', () => ({
+  isS3Configured: () => mockIsS3Configured(),
+  syncFiles: (...args: SyncFilesArgs) => mockSyncFiles(...args),
+}));
 
 function splitExecFileArgs(allArgs: unknown[]): {
   command: string;
@@ -34,6 +48,10 @@ import { rawDeploySearchableTools } from '../../../agents/raw-deploy-searchable-
 
 beforeEach(() => {
   mockExecFile.mockReset();
+  mockIsS3Configured.mockReset();
+  mockIsS3Configured.mockReturnValue(false);
+  mockSyncFiles.mockReset();
+  mockSyncFiles.mockResolvedValue(0);
 });
 
 function makeRequestContext(initial: Record<string, unknown> = {}) {
@@ -482,7 +500,7 @@ describe('remote repository tool surface', () => {
         branch: 'main',
         applicationId,
       },
-      { workspace, requestContext, writer },
+      { workspace, requestContext, writer } as unknown as Parameters<NonNullable<typeof loadRemoteRepositoryTool.execute>>[1],
     );
 
     expect(result).toEqual(
@@ -519,5 +537,140 @@ describe('remote repository tool surface', () => {
     expect(workspace.index).toHaveBeenCalledWith(`apps/${applicationId}/src/app.ts`, 'export const x = 1;\n', {
       metadata: { language: 'typescript' },
     });
+  });
+
+  it('syncs imported files to S3 (under repo-relative paths) when S3 is configured and applicationId is a UUID', async () => {
+    mockIsS3Configured.mockReturnValue(true);
+    mockSyncFiles.mockResolvedValue(2);
+    const applicationId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+    mockExecFile
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { argv, cb } = splitExecFileArgs(allArgs);
+        const dest = argv[argv.length - 1] as string;
+        writeFileSync(join(dest, 'README.md'), '# hi\n');
+        mkdirSync(join(dest, 'src'), { recursive: true });
+        writeFileSync(join(dest, 'src', 'app.ts'), 'export const x = 1;\n');
+        cb(null, '', '');
+      })
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { cb } = splitExecFileArgs(allArgs);
+        cb(null, 'abc123\n', '');
+      });
+
+    const result = await loadRemoteRepositoryTool.execute!(
+      {
+        repoUrl: 'https://github.com/acme/api.git',
+        branch: 'main',
+        applicationId,
+      },
+      { workspace: undefined },
+    );
+
+    expect(mockSyncFiles).toHaveBeenCalledTimes(1);
+    const [calledAppId, calledFiles, calledFullSync] = mockSyncFiles.mock.calls[0]!;
+    expect(calledAppId).toBe(applicationId);
+    expect(calledFullSync).toBe(true);
+    const paths = calledFiles.map((f) => f.path).sort();
+    expect(paths).toEqual(['README.md', 'src/app.ts']);
+    expect(paths.some((p) => p.startsWith('apps/'))).toBe(false);
+    expect(result).toEqual(
+      expect.objectContaining({
+        s3Sync: { attempted: true, synced: 2 },
+      }),
+    );
+    expect((result as { message: string }).message).toContain('synced to S3 workspace');
+  });
+
+  it('skips S3 sync when S3 is not configured', async () => {
+    mockIsS3Configured.mockReturnValue(false);
+    const applicationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+
+    mockExecFile
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { argv, cb } = splitExecFileArgs(allArgs);
+        const dest = argv[argv.length - 1] as string;
+        writeFileSync(join(dest, 'README.md'), '# hi\n');
+        cb(null, '', '');
+      })
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { cb } = splitExecFileArgs(allArgs);
+        cb(null, 'abc\n', '');
+      });
+
+    const result = await loadRemoteRepositoryTool.execute!(
+      {
+        repoUrl: 'https://github.com/acme/api.git',
+        branch: 'main',
+        applicationId,
+      },
+      { workspace: undefined },
+    );
+
+    expect(mockSyncFiles).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ s3Sync: { attempted: false } }));
+  });
+
+  it('skips S3 sync when there is no UUID applicationId (e.g., random sync target)', async () => {
+    mockIsS3Configured.mockReturnValue(true);
+
+    mockExecFile
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { argv, cb } = splitExecFileArgs(allArgs);
+        const dest = argv[argv.length - 1] as string;
+        writeFileSync(join(dest, 'README.md'), '# hi\n');
+        cb(null, '', '');
+      })
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { cb } = splitExecFileArgs(allArgs);
+        cb(null, 'abc\n', '');
+      });
+
+    const result = await loadRemoteRepositoryTool.execute!(
+      {
+        repoUrl: 'https://github.com/acme/api.git',
+        branch: 'main',
+        applicationId: undefined,
+      },
+      { workspace: undefined },
+    );
+
+    expect(mockSyncFiles).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ s3Sync: { attempted: false } }));
+  });
+
+  it('does not fail the import when S3 sync throws; surfaces the error in s3Sync', async () => {
+    mockIsS3Configured.mockReturnValue(true);
+    mockSyncFiles.mockRejectedValue(new Error('S3 timeout'));
+    const applicationId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+    mockExecFile
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { argv, cb } = splitExecFileArgs(allArgs);
+        const dest = argv[argv.length - 1] as string;
+        writeFileSync(join(dest, 'README.md'), '# hi\n');
+        cb(null, '', '');
+      })
+      .mockImplementationOnce((...allArgs: unknown[]) => {
+        const { cb } = splitExecFileArgs(allArgs);
+        cb(null, 'abc\n', '');
+      });
+
+    const result = await loadRemoteRepositoryTool.execute!(
+      {
+        repoUrl: 'https://github.com/acme/api.git',
+        branch: 'main',
+        applicationId,
+      },
+      { workspace: undefined },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        fileCount: 1,
+        s3Sync: { attempted: true, error: 'S3 timeout' },
+      }),
+    );
+    expect((result as { message: string }).message).toContain('S3 sync failed');
   });
 });
