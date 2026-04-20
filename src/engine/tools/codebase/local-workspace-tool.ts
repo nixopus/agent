@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Workspace, WorkspaceFilesystem } from '@mastra/core/workspace';
 import { listFiles, isS3Configured } from '../../../features/workspace/s3-store';
 import type { FetchedFile } from '../../../features/workspace/support';
+import { analyzeFiles } from '../../../features/workspace/repo-analyzer';
 
 async function ensureInitialized(workspace: Workspace): Promise<void> {
   if (workspace.status === 'pending') {
@@ -52,10 +53,11 @@ async function populateWorkspace(
 export const loadLocalWorkspaceTool = createTool({
   id: 'load_local_workspace',
   description:
-    'Load a locally-synced workspace (non-GitHub) into the agent workspace for analysis. ' +
-    'Use this when the user has a local workspace linked via S3 sync instead of a GitHub repository. ' +
-    'Pass the syncTarget from the context block (this is the applicationId if the app exists, or workspaceId if first deploy). ' +
-    'After calling this, use read_file, grep, search, list_directory to explore the codebase.',
+    'Load a locally-synced workspace and return deployment hints. ' +
+    'Returns ecosystem, framework, port, Dockerfile presence, and more with confidence levels. ' +
+    'When hints.confidence is "high", proceed directly to create/deploy. ' +
+    'When "medium", verify only the flagged items. When "low", explore with workspace tools. ' +
+    'Pass the syncTarget from the context block.',
   inputSchema: z.object({
     applicationId: z.string().min(1).describe('The syncTarget UUID from the context block'),
   }),
@@ -78,10 +80,17 @@ export const loadLocalWorkspaceTool = createTool({
       await populateWorkspace(workspace, workspaceRoot, files);
     }
 
+    const hints = analyzeFiles(files);
+
     return {
       workspaceRoot,
       fileCount: files.length,
-      message: 'Local workspace loaded. Use read_file, grep, search, list_directory to explore.',
+      hints,
+      message: hints.confidence === 'high'
+        ? 'Workspace analyzed with high confidence. Proceed to create/deploy.'
+        : hints.confidence === 'medium'
+          ? `Workspace loaded. Verify flagged items: ${hints.warnings.join('; ')}`
+          : 'Workspace loaded. Explore with workspace tools to confirm deployment config.',
     };
   },
 });

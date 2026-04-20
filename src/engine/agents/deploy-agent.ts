@@ -3,7 +3,7 @@ import type { MastraMemory } from '@mastra/core/memory';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
 import { applicationTools } from '../tools/api/application-tools';
-import { projectTools } from '../tools/api/project-tools';
+import { projectTools, quickDeployTool } from '../tools/api/project-tools';
 import { generateRandomSubdomainTool } from '../tools/api/domain-tools';
 import { resolveContextTool } from '../tools/api/context-tools';
 import { askUserTool } from '../tools/shared/ask-user-tool';
@@ -33,11 +33,13 @@ import { ToolResultPruner } from './tool-result-pruner';
 import { ContextInjectorProcessor } from './context-injector';
 import { DeployPatternProcessor } from './deploy-pattern-processor';
 import { DeployOutcomeProcessor } from './deploy-outcome-processor';
+import { DeployFlowInjector } from './deploy-flow-injector';
 import { PatternStore } from './pattern-store';
 import { createRequestWorkspace } from '../workspace-factory';
 import { getDb } from '../../db';
 
 const contextInjector = new ContextInjectorProcessor();
+const deployFlowInjector = new DeployFlowInjector();
 const deployStateProcessor = new DeployStateProcessor();
 const toolResultPruner = new ToolResultPruner();
 const deployPatternProcessor = new DeployPatternProcessor();
@@ -74,6 +76,7 @@ export const rawDeployCoreTools = {
   getDeploymentLogs: applicationTools.getDeploymentLogs,
   deployProject: projectTools.deployProject,
   createProject: projectTools.createProject,
+  quickDeploy: quickDeployTool,
   generateRandomSubdomain: generateRandomSubdomainTool,
   resolveContext: resolveContextTool,
   askUser: askUserTool,
@@ -104,7 +107,7 @@ export const deployAgent = new Agent({
   name: 'Deploy Agent',
   instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
-  inputProcessors: [unicodeNormalizer, contextInjector, deployStateProcessor, deployPatternProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
+  inputProcessors: [unicodeNormalizer, contextInjector, deployFlowInjector, deployStateProcessor, deployPatternProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
   outputProcessors: [deployOutcomeProcessor],
   workspace: createRequestWorkspace,
   tools: { ...deployCoreTools, delegate: delegateTool },

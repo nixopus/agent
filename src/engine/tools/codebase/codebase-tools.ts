@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Workspace, WorkspaceFilesystem } from '@mastra/core/workspace';
 import { fetchRepoFiles } from '../../../features/workspace/support';
 import type { FetchedFile } from '../../../features/workspace/support';
+import { analyzeFiles } from '../../../features/workspace/repo-analyzer';
 import type { NixopusRequestContext } from '../shared/nixopus-client';
 
 async function ensureInitialized(workspace: Workspace): Promise<void> {
@@ -53,8 +54,10 @@ async function populateWorkspace(
 export const analyzeRepositoryTool = createTool({
   id: 'analyze_repository',
   description:
-    'Fetch a GitHub repository for analysis. Returns a path for workspace tools. ' +
-    'After calling this, use read_file, grep, search, list_directory to explore. ' +
+    'Fetch a GitHub repository and return deployment hints. ' +
+    'Returns ecosystem, framework, port, Dockerfile presence, and more with confidence levels. ' +
+    'When hints.confidence is "high", proceed directly to create/deploy. ' +
+    'When "medium", verify only the flagged items. When "low", explore with workspace tools. ' +
     'Does NOT require an applicationId — call this first.',
   inputSchema: z.object({
     owner: z.string().describe('GitHub repository owner'),
@@ -78,11 +81,18 @@ export const analyzeRepositoryTool = createTool({
       await populateWorkspace(workspace, repoRoot, files);
     }
 
+    const hints = analyzeFiles(files);
+
     return {
       repoRoot,
       fileCount: files.length,
       commit: treeSha,
-      message: 'Repository fetched successfully. Use read_file, grep, search, list_directory to explore.',
+      hints,
+      message: hints.confidence === 'high'
+        ? 'Repository analyzed with high confidence. Proceed to create/deploy.'
+        : hints.confidence === 'medium'
+          ? `Repository analyzed. Verify flagged items: ${hints.warnings.join('; ')}`
+          : 'Repository loaded. Explore with workspace tools to confirm deployment config.',
     };
   },
 });

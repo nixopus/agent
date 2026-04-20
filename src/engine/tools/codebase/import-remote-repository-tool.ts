@@ -13,6 +13,7 @@ import {
   isSkippedPath,
   type FetchedFile,
 } from '../../../features/workspace/support';
+import { analyzeFiles } from '../../../features/workspace/repo-analyzer';
 import { isPublicGitUrl, toCloneSafeHttpsUrl } from './git-url';
 import {
   isS3Configured,
@@ -459,9 +460,10 @@ const publicHttpsGitUrlSchema = z
 export const loadRemoteRepositoryTool = createTool({
   id: 'load_remote_repository',
   description:
-    'Load a public remote git repository into the workspace for analysis. ' +
-    'Use when the GitHub connector is unavailable and the user provides a public HTTPS git URL. ' +
-    'After calling this, use read_file, grep, search, list_directory to explore.',
+    'Load a public remote git repository and return deployment hints. ' +
+    'Returns ecosystem, framework, port, Dockerfile presence, and more with confidence levels. ' +
+    'When hints.confidence is "high", proceed directly to create/deploy. ' +
+    'When "medium", verify only the flagged items. When "low", explore with workspace tools.',
   inputSchema: z.object({
     repoUrl: publicHttpsGitUrlSchema.describe('Public HTTPS clone URL for the repository'),
     branch: z.string().min(1).optional().describe('Optional branch to check out (default: remote default)'),
@@ -537,6 +539,8 @@ export const loadRemoteRepositoryTool = createTool({
         }
       : await syncFetchedFilesToS3(applicationId, imported.files);
 
+    const hints = analyzeFiles(imported.files);
+
     const cacheNote = cacheOutcome
       ? ` [cache:${cacheOutcome.source} ${cacheOutcome.sha?.slice(0, 7) ?? ''}]`
       : '';
@@ -546,13 +550,14 @@ export const loadRemoteRepositoryTool = createTool({
       fileCount: imported.fileCount,
       commit: imported.commit,
       branch: imported.branch,
+      hints,
       s3Sync,
       ...(cacheOutcome && { cache: cacheOutcome }),
-      message: s3Sync.attempted && s3Sync.synced
-        ? `Repository source loaded successfully (${s3Sync.synced} files synced to workspace)${cacheNote}. Continuing deployment with this codebase.`
-        : s3Sync.attempted && s3Sync.error
-          ? `Repository source loaded but workspace sync failed: ${s3Sync.error}. Deployment may report no source files.`
-          : `Repository source loaded successfully${cacheNote}. Continuing deployment with this codebase.`,
+      message: hints.confidence === 'high'
+        ? `Repository analyzed with high confidence${cacheNote}. Proceed to create/deploy.`
+        : hints.confidence === 'medium'
+          ? `Repository loaded${cacheNote}. Verify flagged items: ${hints.warnings.join('; ')}`
+          : `Repository loaded${cacheNote}. Explore with workspace tools to confirm deployment config.`,
     };
   },
 });

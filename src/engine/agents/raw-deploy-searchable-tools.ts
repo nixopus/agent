@@ -14,7 +14,6 @@ export const rawDeploySearchableTools = {
   getGithubConnectors: githubConnectorTools.getGithubConnectors,
   getGithubRepositories: githubConnectorTools.getGithubRepositories,
   analyzeRepository: codebaseTools.analyzeRepository,
-  prepareCodebase: codebaseTools.prepareCodebase,
   loadLocalWorkspace: codebaseTools.loadLocalWorkspace,
   loadRemoteRepository: codebaseTools.loadRemoteRepository,
   writeWorkspaceFiles: deployGenTools.writeWorkspaceFiles,
