@@ -1,53 +1,27 @@
 import { Agent } from '@mastra/core/agent';
-import { ToolSearchProcessor } from '@mastra/core/processors';
 import { config } from '../../config';
 import { openrouterProvider, agentDefaults } from './shared';
-import { getContainerTool, getContainerLogsTool, startContainerTool, stopContainerTool, restartContainerTool } from '../tools/api/container-tools';
-import { getDomainsTool, createDomainTool, deleteDomainTool, generateRandomSubdomainTool } from '../tools/api/domain-tools';
-import { healthcheckTools } from '../tools/api/healthcheck-tools';
-import { addApplicationDomainTool, removeApplicationDomainTool } from '../tools/api/application-tools';
-import { getServersTool, getServersSshStatusTool, getApplicationServersTool, setApplicationServersTool, setServerAsOrgDefaultTool } from '../tools/api/system-tools';
+import { nixopusApiTool } from '../tools/api/nixopus-api-tool';
 import { httpTools } from '../tools/diagnostics/http-tools';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
+import { ApiCatalogInjector } from './api-catalog-injector';
+
+const apiCatalogInjector = new ApiCatalogInjector();
 
 const infraCoreTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat({
-  getServers: getServersTool,
-  getContainer: getContainerTool,
-  getDomains: getDomainsTool,
-})));
-
-const infraSearchableTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat({
-  getServersSshStatus: getServersSshStatusTool,
-  getApplicationServers: getApplicationServersTool,
-  setApplicationServers: setApplicationServersTool,
-  setServerAsOrgDefault: setServerAsOrgDefaultTool,
-  getContainerLogs: getContainerLogsTool,
-  startContainer: startContainerTool,
-  stopContainer: stopContainerTool,
-  restartContainer: restartContainerTool,
-  createDomain: createDomainTool,
-  deleteDomain: deleteDomainTool,
-  generateRandomSubdomain: generateRandomSubdomainTool,
-  addApplicationDomain: addApplicationDomainTool,
-  removeApplicationDomain: removeApplicationDomainTool,
+  nixopusApi: nixopusApiTool,
   httpProbe: httpTools.httpProbe,
-  ...healthcheckTools,
 })));
-
-const infraToolSearch = new ToolSearchProcessor({
-  tools: infraSearchableTools,
-  search: { topK: 5, minScore: 0.1 },
-});
 
 export const infrastructureAgent = new Agent({
   id: 'infrastructure-agent',
   name: 'Infrastructure Agent',
   description: 'Manages servers, containers, and domains. Handles container lifecycle, domain binding, and reachability checks.',
-  instructions: `Manage servers, containers, domains, and healthchecks for Nixopus apps. Discover IDs via list tools, never ask users. Be concise. Never use emojis in any output. Plain text only.
+  instructions: `Manage servers, containers, domains, and healthchecks for Nixopus apps. Use nixopus_api(operation, params) for all API calls. See [api-catalog] in context for available operations. Be concise. Never use emojis in any output. Plain text only.
 
-TOOL LOADING: Core tools are available immediately (get_servers, get_container, get_domains). For mutations, diagnostics, and healthcheck management, use search_tools to find tools by keyword (e.g. "container start stop restart", "domain create delete bind", "http probe", "healthcheck create toggle results", "server application default"), then load_tool to activate them.
+Key operations: get_servers, get_container, get_domains, get_servers_ssh_status, get_application_servers, set_application_servers, set_server_as_org_default, get_container_logs, start_container, stop_container, restart_container, create_domain, delete_domain, generate_random_subdomain, add_application_domain, remove_application_domain, create_health_check, get_health_check, update_health_check, delete_health_check, toggle_health_check, get_health_check_results, get_health_check_stats.
 
 Responsibilities:
 - Container lifecycle: start, stop, restart containers. View container details and logs.
@@ -55,7 +29,7 @@ Responsibilities:
 - Healthchecks: create, update, delete, toggle healthchecks. View results and stats.
 - Server context: list servers, check SSH status, manage application-to-server assignments, set org default server.`,
   model: config.agentLightModel,
-  inputProcessors: [infraToolSearch],
+  inputProcessors: [apiCatalogInjector],
   tools: infraCoreTools,
   defaultOptions: agentDefaults({
     maxSteps: 15,
@@ -63,4 +37,3 @@ Responsibilities:
     providerOptions: openrouterProvider(4000),
   }),
 });
-

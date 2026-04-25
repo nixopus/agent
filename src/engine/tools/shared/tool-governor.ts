@@ -23,16 +23,19 @@ interface GovernorState {
 const GOVERNOR_STATE_KEY = 'governorState';
 const IGNORED_HASH_KEYS = new Set(['verbose', 'response_format', 'force']);
 
+function deepSortedStringify(val: unknown): string {
+  if (val == null || typeof val !== 'object') return JSON.stringify(val);
+  if (Array.isArray(val)) return `[${val.map(deepSortedStringify).join(',')}]`;
+  const obj = val as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${deepSortedStringify(obj[k])}`).join(',')}}`;
+}
+
 function stableHash(input: unknown): string {
   if (input == null || typeof input !== 'object') return String(input);
   const obj = input as Record<string, unknown>;
   const keys = Object.keys(obj).filter((k) => !IGNORED_HASH_KEYS.has(k)).sort();
-  const parts: string[] = [];
-  for (const k of keys) {
-    const v = obj[k];
-    parts.push(`${k}:${typeof v === 'object' ? JSON.stringify(v, Object.keys(v as object).sort()) : String(v)}`);
-  }
-  return parts.join('|');
+  return keys.map((k) => `${k}:${deepSortedStringify(obj[k])}`).join('|');
 }
 
 type RequestContext = { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void };

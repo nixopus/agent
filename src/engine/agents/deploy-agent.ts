@@ -2,10 +2,9 @@ import { Agent } from '@mastra/core/agent';
 import type { MastraMemory } from '@mastra/core/memory';
 import { Memory } from '@mastra/memory';
 import { config } from '../../config';
-import { applicationTools } from '../tools/api/application-tools';
-import { projectTools, quickDeployTool } from '../tools/api/project-tools';
-import { generateRandomSubdomainTool } from '../tools/api/domain-tools';
+import { quickDeployTool, createProjectTool } from '../tools/api/project-tools';
 import { resolveContextTool } from '../tools/api/context-tools';
+import { nixopusApiTool } from '../tools/api/nixopus-api-tool';
 import { askUserTool } from '../tools/shared/ask-user-tool';
 import { diagnosticAgent } from './diagnostic-agent';
 import { machineAgent } from './machine-agent';
@@ -35,6 +34,7 @@ import { ContextInjectorProcessor } from './context-injector';
 import { DeployPatternProcessor } from './deploy-pattern-processor';
 import { DeployOutcomeProcessor } from './deploy-outcome-processor';
 import { DeployFlowInjector } from './deploy-flow-injector';
+import { ApiCatalogInjector } from './api-catalog-injector';
 import { ToolBudgetProcessor } from './tool-budget-processor';
 import { PatternStore } from './pattern-store';
 import { createRequestWorkspace } from '../workspace-factory';
@@ -42,27 +42,23 @@ import { getDb } from '../../db';
 
 const contextInjector = new ContextInjectorProcessor();
 const deployFlowInjector = new DeployFlowInjector();
+const apiCatalogInjector = new ApiCatalogInjector();
 const toolBudgetProcessor = new ToolBudgetProcessor(100);
 
 const DEPLOY_GOVERNOR_POLICY: GovernorPolicy = {
   defaultLimit: 5,
   readOnlyLimit: 8,
   readOnlyTools: new Set([
-    'getApplications', 'getApplication',
-    'getApplicationDeployments', 'getDeploymentById',
-    'getDeploymentLogs', 'resolveContext',
+    'resolveContext',
     'search_tools', 'load_tool',
+    'nixopusApi',
   ]),
   limits: {
-    getDeploymentById: 15,
-    getDeploymentLogs: 3,
     resolveContext: 2,
-    getApplications: 2,
     search_tools: 10,
     load_tool: 10,
     quickDeploy: 2,
-    createProject: 2,
-    deployProject: 3,
+    nixopusApi: 40,
     askUser: 5,
   },
 };
@@ -95,16 +91,10 @@ const deployMemory = new Memory({
 });
 
 export const rawDeployCoreTools = {
-  getApplications: applicationTools.getApplications,
-  getApplication: applicationTools.getApplication,
-  getApplicationDeployments: applicationTools.getApplicationDeployments,
-  getDeploymentById: applicationTools.getDeploymentById,
-  getDeploymentLogs: applicationTools.getDeploymentLogs,
-  deployProject: projectTools.deployProject,
-  createProject: projectTools.createProject,
+  createProject: createProjectTool,
   quickDeploy: quickDeployTool,
-  generateRandomSubdomain: generateRandomSubdomainTool,
   resolveContext: resolveContextTool,
+  nixopusApi: nixopusApiTool,
   askUser: askUserTool,
 };
 
@@ -133,7 +123,7 @@ export const deployAgent = new Agent({
   name: 'Deploy Agent',
   instructions: DEPLOY_INSTRUCTIONS,
   model: ({ requestContext }) => requestContext?.get?.('modelId') || config.agentModel,
-  inputProcessors: [unicodeNormalizer, contextInjector, deployFlowInjector, deployStateProcessor, toolBudgetProcessor, deployPatternProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
+  inputProcessors: [unicodeNormalizer, contextInjector, apiCatalogInjector, deployFlowInjector, deployStateProcessor, toolBudgetProcessor, deployPatternProcessor, toolResultPruner, deployToolSearch, tokenLimiter(128_000)],
   outputProcessors: [deployOutcomeProcessor],
   workspace: createRequestWorkspace,
   tools: { ...deployCoreTools, delegate: delegateTool },

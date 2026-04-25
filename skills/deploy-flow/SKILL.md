@@ -29,7 +29,7 @@ No context block: Check `[user-context]` first — it has connectors, repos, app
 
 **Routing (no `[context]` block):**
 
-1. **Connectors/repos available** (per `[user-context]`, or refresh with GitHub tools only if that context is clearly stale — e.g. user says they just connected GitHub but `[user-context]` still shows no connectors; repo/app lists contradict what a fresh `get_github_repositories` / `getApplications` call returns; or the user reports an error about a resource that does not appear in context) **and** the user did **not** explicitly request deploying from a public git URL (connector bypass — see **Case B** examples above): **standard GitHub flow.** Use pre-loaded connector/repo IDs instead of redundant `get_github_connectors` / `get_github_repositories` when possible. Then: `analyze_repository` (returns hints) → use hints to decide config → `quick_deploy` or `createProject` + `deploy_project`.
+1. **Connectors/repos available** (per `[user-context]`, or refresh with nixopus_api('get_github_repositories') / nixopus_api('get_applications') only if context is clearly stale — e.g. user says they just connected GitHub but `[user-context]` still shows no connectors; repo/app lists contradict what a fresh call returns; or the user reports an error about a resource that does not appear in context) **and** the user did **not** explicitly request deploying from a public git URL (connector bypass — see **Case B** examples above): **standard GitHub flow.** Use pre-loaded connector/repo IDs instead of redundant API calls when possible. Then: `analyze_repository` (returns hints) → use hints to decide config → `quick_deploy` or `createProject` + nixopus_api('deploy_project', { id }).
 
    **Fallback (connector path failed, URL still viable):** If you already chose the standard GitHub flow but a required GitHub/connector step fails (auth, missing repo, permission, transient API error, etc.) **and** the user's message still contains a **valid public HTTPS git clone URL** you can use: switch to **`load_remote_repository`** with that URL (and branch if given), then continue the **hints-driven** deploy flow. Prefer this over repeatedly retrying the connector when the public URL is a known-good alternative. Connector-first ordering is unchanged: attempt the connector path first when the rules above apply; only fall back after a real failure.
 
@@ -58,17 +58,17 @@ A [deploy-patterns] block may be injected with known fixes, pitfalls, and fast p
 
 6. **Create and deploy** (if app doesn't exist):
    - **Preferred: quick_deploy** — creates the project and deploys in one step. Auto-generates a subdomain if domains is empty. Use this for first-time deploys when you have all the deployment config from hints. For compose: pass compose_services and compose_domains.
-   - **Alternative: createProject then deploy_project** — use when you need to modify the app between creation and deployment (e.g. setting env vars via updateApplication). createProject also auto-generates a subdomain if domains is empty.
+   - **Alternative: createProject then nixopus_api('deploy_project', { id })** — use when you need to modify the app between creation and deployment (e.g. setting env vars via nixopus_api('update_application', { id, ... })). createProject also auto-generates a subdomain if domains is empty.
    - For custom domains, read_skill("domain-attachment").
 
-7. Monitor deployment — mandatory but lean. Call getApplicationDeployments(limit=1) once to get the deployment ID. Then poll getDeploymentById only — do NOT call getDeploymentLogs unless the status is failed/error or the user asks. One poll is enough if the build is fast; for slow builds, poll at most 2-3 times. Do NOT call getApplication after deploy — you already have the app details from creation.
+7. Monitor deployment — mandatory but lean. Call nixopus_api('get_application_deployments', { id, limit: 1 }) once to get the deployment ID. Then poll nixopus_api('get_deployment_by_id', { deployment_id }) only — do NOT call get_deployment_logs unless the status is failed/error or the user asks. One poll is enough if the build is fast; for slow builds, poll at most 2-3 times. Do NOT call get_application after deploy — you already have the app details from creation.
 8. Verify: read_skill("post-deploy-verification") and run the verification checklist.
 9. Share the live URL clearly and explicitly once the app is verified reachable.
 
 ## Rules
 - Use createProject or quick_deploy to create apps. create_application does not exist.
-- Check [user-context] apps (or `getApplications` if context is stale — use the same "clearly stale" signals as **Routing** step 1) before creating to avoid duplicates.
-- Never hardcode secrets. Use updateApplication for env vars.
+- Check [user-context] apps (or nixopus_api('get_applications') if context is stale — use the same "clearly stale" signals as **Routing** step 1) before creating to avoid duplicates.
+- Never hardcode secrets. Use nixopus_api('update_application', { id, environment_variables }) for env vars.
 - Keep user-facing responses product-level. Do **not** mention internal implementation details like source storage internals, sync internals, tool names/IDs, hints, confidence levels, or context block fields.
 - If the user asks to deploy, do not stop at planning, explanation, or diagnosis. Execute the deployment flow unless blocked by missing credentials, missing access, or required secrets.
 - "Would you like me to fix this?" is a failure mode when the fix is obvious. Fix it.

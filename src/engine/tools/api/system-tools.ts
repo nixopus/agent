@@ -1,12 +1,12 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import {
-  listServers,
+  listMachines,
   getSshConnectionStatus,
-  getSshConnectionStatusForASpecificServer,
+  sShConnectionStatus,
   getApplicationServers,
   setApplicationServers,
-  setServerAsOrgDefault,
+  setMachineAsOrgDefault,
   listAuditLogs,
   listFeatureFlags,
   checkIfFeatureIsEnabled,
@@ -16,10 +16,10 @@ import {
   performUpdate,
   handleGitHubWebhook,
   zGetSshConnectionStatusData,
-  zGetSshConnectionStatusForASpecificServerData,
+  zSShConnectionStatusData,
   zGetApplicationServersData,
   zSetApplicationServersData,
-  zSetServerAsOrgDefaultData,
+  zSetMachineAsOrgDefaultData,
   zListAuditLogsData,
   zListFeatureFlagsData,
   zCheckIfFeatureIsEnabledData,
@@ -41,7 +41,7 @@ export const getServersTool = createTool({
     verbose: z.boolean().optional(),
   }),
   execute: async (inputData, ctx) => {
-    const data = await listServers({ client: getClient(ctx) } as unknown as Parameters<typeof listServers>[0]);
+    const data = await listMachines({ client: getClient(ctx) } as unknown as Parameters<typeof listMachines>[0]);
     return shouldReturnVerbose(inputData) ? data : compactResult(data, 'get_servers', getReadControls(inputData));
   },
 });
@@ -113,8 +113,8 @@ const factoryTools = defineToolGroup({
   getServerSshStatus: {
     id: 'get_server_ssh_status',
     description: 'Read-only. Check SSH connectivity status for a specific server by server_id.',
-    schema: zGetSshConnectionStatusForASpecificServerData,
-    sdkFn: getSshConnectionStatusForASpecificServer,
+    schema: zSShConnectionStatusData,
+    sdkFn: sShConnectionStatus,
     pathKeys: ['server_id'],
   },
   getApplicationServers: {
@@ -133,9 +133,9 @@ const factoryTools = defineToolGroup({
   },
   setServerAsOrgDefault: {
     id: 'set_server_as_org_default',
-    description: 'Mutating. Set a server as the default for the organization. Required: server_id.',
-    schema: zSetServerAsOrgDefaultData,
-    sdkFn: setServerAsOrgDefault,
+    description: 'Mutating. Set a machine as the default for the organization. Required: server_id.',
+    schema: zSetMachineAsOrgDefaultData,
+    sdkFn: setMachineAsOrgDefault,
     pathKeys: ['server_id'],
   },
 });
