@@ -43,7 +43,9 @@ export function createAppMiddleware(getPostgresStore: () => PostgresStore) {
     const cookieHeader = c.req.header('Cookie');
     const apiKeyHeader = c.req.header('x-api-key');
     const organizationIdHeader = c.req.header('X-Organization-Id') || c.req.header('x-organization-id');
-    const modelIdHeader = c.req.header('X-Model-Id');
+    const modelIdHeader = c.req.header('X-Model-Id')
+      || new URL(c.req.url).searchParams.get('model')
+      || undefined;
     const requestContext = c.get('requestContext') as
       | { set: (key: string, value: unknown) => void }
       | undefined;

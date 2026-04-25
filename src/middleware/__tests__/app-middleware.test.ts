@@ -263,6 +263,25 @@ describe('app-middleware — request context propagation', () => {
     expect(ctx._requestContext.get('modelId')).toBe('gpt-4o');
   });
 
+  it('sets modelId from ?model query param', async () => {
+    const mw = getMiddleware();
+    const ctx = makeContext({
+      url: 'http://localhost:3000/api/test?model=google/gemini-2.5-flash',
+    });
+    await mw(ctx, nextOk());
+    expect(ctx._requestContext.get('modelId')).toBe('google/gemini-2.5-flash');
+  });
+
+  it('prefers X-Model-Id header over ?model query param', async () => {
+    const mw = getMiddleware();
+    const ctx = makeContext({
+      url: 'http://localhost:3000/api/test?model=google/gemini-2.5-flash',
+      headers: { 'X-Model-Id': 'anthropic/claude-sonnet-4' },
+    });
+    await mw(ctx, nextOk());
+    expect(ctx._requestContext.get('modelId')).toBe('anthropic/claude-sonnet-4');
+  });
+
   it('prefers session org over header org', async () => {
     mockIsAuthEnabled.mockReturnValue(true);
     mockVerifySession.mockResolvedValue({

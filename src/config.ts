@@ -1,3 +1,13 @@
+const _agentModel = process.env.AGENT_MODEL || 'openrouter/anthropic/claude-sonnet-4';
+const _agentLightModel = process.env.AGENT_LIGHT_MODEL || 'openrouter/openai/gpt-4o-mini';
+
+function defaultOmModel(): string {
+  const provider = _agentLightModel.split('/')[0];
+  if (provider === 'google') return 'google/gemini-2.5-flash';
+  if (provider === 'openrouter') return 'openrouter/google/gemini-2.5-flash';
+  return _agentLightModel;
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isProduction: process.env.NODE_ENV === 'production',
@@ -25,8 +35,8 @@ export const config = {
 
   dashboardUrl: process.env.DASHBOARD_URL || '',
 
-  agentModel: process.env.AGENT_MODEL || 'openrouter/anthropic/claude-sonnet-4',
-  agentLightModel: process.env.AGENT_LIGHT_MODEL || 'openrouter/openai/gpt-4o-mini',
+  agentModel: _agentModel,
+  agentLightModel: _agentLightModel,
   agentMaxOutputTokens: parseInt(process.env.AGENT_MAX_OUTPUT_TOKENS || '4000', 10),
   agentMaxSteps: parseInt(process.env.AGENT_MAX_STEPS || '15', 10),
 
@@ -53,7 +63,7 @@ export const config = {
   observationalMemory: {
     messageTokens: parseInt(process.env.OM_MESSAGE_TOKENS || '30000', 10),
     observationTokens: parseInt(process.env.OM_OBSERVATION_TOKENS || '40000', 10),
-    model: process.env.OM_MODEL || 'openrouter/google/gemini-2.5-flash',
+    model: process.env.OM_MODEL || defaultOmModel(),
   },
 
   s3: {
