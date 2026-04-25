@@ -2,7 +2,7 @@ import type { Processor, ProcessInputStepArgs, ProcessInputStepResult } from '@m
 import {
   listApplications,
   listDomains,
-  listServers,
+  listMachines,
   listGitHubConnectors,
   listGitHubRepositories,
   listOrgMcpServers,
@@ -149,7 +149,7 @@ async function fetchAndFormat(requestContext: NixopusRequestContext): Promise<st
   const results = await Promise.allSettled([
     listApplications({ client } as Parameters<typeof listApplications>[0]),
     listDomains({ client } as Parameters<typeof listDomains>[0]),
-    listServers({ client } as unknown as Parameters<typeof listServers>[0]),
+    listMachines({ client } as unknown as Parameters<typeof listMachines>[0]),
     listGitHubConnectors({ client } as Parameters<typeof listGitHubConnectors>[0]),
     listOrgMcpServers({ client } as Parameters<typeof listOrgMcpServers>[0]),
   ]);

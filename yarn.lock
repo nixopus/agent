@@ -1643,16 +1643,16 @@
   integrity sha512-x0fWaQtYp4E6sktbsdAqnehxDgEc/VwM7uLsRCYWaiGu0ykYdZPiS8zCWdnjHwyiumousxfBm4SO31eXqwEZhQ==
 
 "@napi-rs/wasm-runtime@^1.1.1":
-  version "1.1.3"
-  resolved "https://registry.yarnpkg.com/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.3.tgz#1eeb8699770481306e5fcd84471f20fcb6177336"
-  integrity sha512-xK9sGVbJWYb08+mTJt3/YV24WxvxpXcXtP6B172paPZ+Ts69Re9dAr7lKwJoeIx8OoeuimEiRZ7umkiUVClmmQ==
+  version "1.1.4"
+  resolved "https://registry.yarnpkg.com/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.4.tgz#a46bbfedc29751b7170c5d23bc1d8ee8c7e3c1e1"
+  integrity sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==
   dependencies:
     "@tybys/wasm-util" "^0.10.1"
 
-"@nixopus/api-client@0.0.16":
-  version "0.0.16"
-  resolved "https://registry.yarnpkg.com/@nixopus/api-client/-/api-client-0.0.16.tgz#2c19fefc96c7b04e967917e442e7c35f4491028c"
-  integrity sha512-hwE43D97TWE1AZPdEP0bIDp99J3OIuU+08rCpzUIp6M/t4hLS/idv7d6jzKVM1KsCUoY5ackWtqkUHbESOKTew==
+"@nixopus/api-client@0.0.17":
+  version "0.0.17"
+  resolved "https://registry.npmjs.org/@nixopus/api-client/-/api-client-0.0.17.tgz"
+  integrity sha512-UQ5nGwXRml9wVe0+RY4XhFLOD7gWr2Q7Q9xHyamOHJbJesIqrqVBNFFAdMXVoS7t5ZAjqZguYfbN7xlKfSNIWA==
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   listApplications as getApiV1DeployApplications,
   listApplicationDeployments as getApiV1DeployApplicationDeployments,
-  listServers as getApiV1Servers,
+  listMachines as getApiV1Servers,
   listDomains as getApiV1Domains,
   listGitHubConnectors as getApiV1GithubConnectorAll,
   listGitHubRepositories as getApiV1GithubConnectorRepositories,

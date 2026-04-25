@@ -6,7 +6,7 @@ vi.mock('../../../logger', () => ({
 
 const mockListApplications = vi.fn();
 const mockListDomains = vi.fn();
-const mockListServers = vi.fn();
+const mockListMachines = vi.fn();
 const mockListGitHubConnectors = vi.fn();
 const mockListGitHubRepositories = vi.fn();
 const mockListOrgMcpServers = vi.fn();
@@ -14,7 +14,7 @@ const mockListOrgMcpServers = vi.fn();
 vi.mock('@nixopus/api-client', () => ({
   listApplications: (...args: unknown[]) => mockListApplications(...args),
   listDomains: (...args: unknown[]) => mockListDomains(...args),
-  listServers: (...args: unknown[]) => mockListServers(...args),
+  listMachines: (...args: unknown[]) => mockListMachines(...args),
   listGitHubConnectors: (...args: unknown[]) => mockListGitHubConnectors(...args),
   listGitHubRepositories: (...args: unknown[]) => mockListGitHubRepositories(...args),
   listOrgMcpServers: (...args: unknown[]) => mockListOrgMcpServers(...args),
@@ -58,7 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockListApplications.mockResolvedValue({ data: [] });
   mockListDomains.mockResolvedValue({ data: [] });
-  mockListServers.mockResolvedValue({ data: [] });
+  mockListMachines.mockResolvedValue({ data: [] });
   mockListGitHubConnectors.mockResolvedValue({ data: [] });
   mockListGitHubRepositories.mockResolvedValue({ data: [] });
   mockListOrgMcpServers.mockResolvedValue({ data: [] });
@@ -155,7 +155,7 @@ describe('ContextInjectorProcessor', () => {
 
     expect(mockListApplications).toHaveBeenCalledTimes(1);
     expect(mockListDomains).toHaveBeenCalledTimes(1);
-    expect(mockListServers).toHaveBeenCalledTimes(1);
+    expect(mockListMachines).toHaveBeenCalledTimes(1);
     expect(mockListGitHubConnectors).toHaveBeenCalledTimes(1);
     expect(mockListOrgMcpServers).toHaveBeenCalledTimes(1);
     expect(mockListGitHubRepositories).toHaveBeenCalledTimes(1);
@@ -202,7 +202,7 @@ describe('ContextInjectorProcessor', () => {
   it('degrades gracefully when fetches fail', async () => {
     mockListApplications.mockRejectedValue(new Error('network error'));
     mockListDomains.mockRejectedValue(new Error('timeout'));
-    mockListServers.mockRejectedValue(new Error('server error'));
+    mockListMachines.mockRejectedValue(new Error('server error'));
     mockListGitHubConnectors.mockRejectedValue(new Error('auth failed'));
     mockListOrgMcpServers.mockRejectedValue(new Error('500'));
 

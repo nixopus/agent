@@ -1,23 +1,44 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Processor, ProcessInputStepArgs, ProcessInputStepResult } from '@mastra/core/processors';
 import type { MastraDBMessage } from '@mastra/core/agent';
 import { createLogger } from '../../logger';
 
 const logger = createLogger('deploy-flow-injector');
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const DEPLOY_INTENT_RE = /\b(deploy|launch|ship|go\s+live|push\s+to\s+prod|put\s+(?:it\s+)?(?:on|up)|host|set\s*up)\b/i;
 
 let cachedSkillContent: string | null = null;
+
+function findSkillFile(name: string): string | null {
+  const candidates = [
+    join(__dirname, '..', '..', '..', 'skills', name, 'SKILL.md'),
+    join(__dirname, '..', '..', 'skills', name, 'SKILL.md'),
+    join(process.cwd(), 'skills', name, 'SKILL.md'),
+  ];
+  for (const p of candidates) {
+    try {
+      readFileSync(p, 'utf8');
+      return p;
+    } catch { /* try next */ }
+  }
+  return null;
+}
 
 function loadSkillContent(): string | null {
   if (cachedSkillContent !== null) return cachedSkillContent;
 
   try {
-    const skillPath = join(process.cwd(), 'skills', 'deploy-flow', 'SKILL.md');
+    const skillPath = findSkillFile('deploy-flow');
+    if (!skillPath) throw new Error('deploy-flow SKILL.md not found in any candidate path');
     const raw = readFileSync(skillPath, 'utf8');
     const bodyStart = raw.indexOf('# Deploy Flow');
     cachedSkillContent = bodyStart >= 0 ? raw.slice(bodyStart) : raw;
+    logger.info({ skillPath }, 'deploy-flow skill loaded');
     return cachedSkillContent;
   } catch (err) {
     logger.warn({ err }, 'failed to load deploy-flow skill, will fall back to LLM skill loading');

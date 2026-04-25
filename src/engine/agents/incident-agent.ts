@@ -5,25 +5,17 @@ import { Memory } from '@mastra/memory';
 import { config } from '../../config';
 import { unicodeNormalizer, tokenLimiter, agentDefaults, coreInstructions } from './shared';
 import { createRequestWorkspace } from '../workspace-factory';
-import {
-  getApplicationsTool,
-  getApplicationTool,
-  getApplicationDeploymentsTool,
-  getDeploymentLogsTool,
-  getApplicationLogsTool,
-  redeployApplicationTool,
-  restartDeploymentTool,
-} from '../tools/api/application-tools';
-import { getGithubConnectorsTool, getGithubRepositoriesTool, getGithubRepositoryBranchesTool } from '../tools/api/github-connector-tools';
+import { nixopusApiTool } from '../tools/api/nixopus-api-tool';
 import { githubTools } from '../tools/github/github-tools';
-import { notificationTools } from '../tools/api/notification-tools';
-import { listContainersTool, getContainerTool, getContainerLogsTool } from '../tools/api/container-tools';
 import { diagnosticAgent } from './diagnostic-agent';
 import { githubAgent } from './github-agent';
 import { notificationAgent } from './notification-agent';
 import { guardToolsForSchemaCompat } from '../tools/shared/schema-compat-guard';
 import { withCompactOutput } from '../tools/shared/compact-output';
 import { withToonOutput } from '../tools/shared/toon-output';
+import { ApiCatalogInjector } from './api-catalog-injector';
+
+const apiCatalogInjector = new ApiCatalogInjector();
 
 const INCIDENT_INSTRUCTIONS = coreInstructions(
   'You are an autonomous incident response agent. You receive structured failure events and attempt to diagnose, fix, and notify. Plain text only, no emojis.',
@@ -32,9 +24,10 @@ const INCIDENT_INSTRUCTIONS = coreInstructions(
     'rollback-strategy — When to rollback vs fix forward after repeated failures.',
     'failure-diagnosis — Pattern tables for build errors, container crashes.',
   ],
-  `## Tool Loading
-Core tools: get_applications, get_application, get_application_deployments, get_deployment_logs, list_containers, get_container, get_container_logs, get_github_connectors, get_github_repositories, send_notification, redeploy_application, restart_deployment.
-For GitHub ops, channel-specific notifications, and app logs, use search_tools("<keyword>") then load_tool.
+  `## API Access
+Use nixopus_api(operation, params) for all Nixopus API calls. See [api-catalog] in context for available operations.
+Key operations: get_applications, get_application, get_application_deployments, get_deployment_logs, get_application_logs, list_containers, get_container, get_container_logs, get_github_connectors, get_github_repositories, send_notification, redeploy_application, restart_deployment.
+For GitHub file/PR ops, use the dedicated github tools available via search_tools.
 
 ## Memory
 Use recalled context from past incidents for this thread when helpful. Prefer continuity across steps in the same incident.`,
@@ -58,23 +51,10 @@ const incidentMemory = new Memory({
 });
 
 export const rawIncidentCoreTools = {
-  getApplications: getApplicationsTool,
-  getApplication: getApplicationTool,
-  getApplicationDeployments: getApplicationDeploymentsTool,
-  getDeploymentLogs: getDeploymentLogsTool,
-  listContainers: listContainersTool,
-  getContainer: getContainerTool,
-  getContainerLogs: getContainerLogsTool,
-  getGithubConnectors: getGithubConnectorsTool,
-  getGithubRepositories: getGithubRepositoriesTool,
-  sendNotification: notificationTools.sendNotification,
-  redeployApplication: redeployApplicationTool,
-  restartDeployment: restartDeploymentTool,
+  nixopusApi: nixopusApiTool,
 };
 
 export const rawIncidentSearchableTools = {
-  getApplicationLogs: getApplicationLogsTool,
-  getGithubRepositoryBranches: getGithubRepositoryBranchesTool,
   githubListPullRequests: githubTools.githubListPullRequests,
   githubListIssues: githubTools.githubListIssues,
   githubCommentOnPr: githubTools.githubCommentOnPr,
@@ -89,9 +69,6 @@ export const rawIncidentSearchableTools = {
   githubCreateBranch: githubTools.githubCreateBranch,
   githubCreatePullRequest: githubTools.githubCreatePullRequest,
   githubMergePullRequest: githubTools.githubMergePullRequest,
-  sendSlackNotification: notificationTools.sendSlackNotification,
-  sendDiscordNotification: notificationTools.sendDiscordNotification,
-  sendEmailNotification: notificationTools.sendEmailNotification,
 };
 
 const incidentCoreTools = withToonOutput(withCompactOutput(guardToolsForSchemaCompat(rawIncidentCoreTools)));
@@ -109,7 +86,7 @@ export const incidentAgent = new Agent({
   instructions: INCIDENT_INSTRUCTIONS,
   model: config.agentModel,
   workspace: createRequestWorkspace,
-  inputProcessors: [unicodeNormalizer, incidentToolSearch],
+  inputProcessors: [unicodeNormalizer, apiCatalogInjector, incidentToolSearch],
   outputProcessors: [tokenLimiter(4000)],
   tools: incidentCoreTools,
   agents: {
