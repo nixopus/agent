@@ -7,6 +7,9 @@ metadata:
 
 # Deploy Flow
 
+## Sample App Fast Path
+If a `[sample-app-fast-path]` block is injected in the system messages, follow it exactly. Do NOT load this skill or any other skill — the fast path already contains the complete recipe.
+
 ## Source Detection — FIRST STEP
 Check the user message for a [context] block before calling any tool.
 

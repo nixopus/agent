@@ -291,6 +291,7 @@ function stampImportRequestContext(args: {
   syncTarget: string;
   branch: string;
   applicationId?: string;
+  cloneRepoUrl?: string;
 }): void {
   args.requestContext?.set?.('workspaceSource', 'git_url');
   args.requestContext?.set?.('syncTarget', args.syncTarget);
@@ -298,6 +299,9 @@ function stampImportRequestContext(args: {
   args.requestContext?.set?.('contextBranch', args.branch);
   if (args.applicationId) {
     args.requestContext?.set?.('contextApplicationId', args.applicationId);
+  }
+  if (args.cloneRepoUrl) {
+    args.requestContext?.set?.('importedRepoUrl', args.cloneRepoUrl);
   }
 }
 
@@ -521,6 +525,7 @@ export const loadRemoteRepositoryTool = createTool({
       syncTarget,
       branch: imported.branch,
       applicationId,
+      cloneRepoUrl,
     });
 
     const workspaceRoot = `apps/${syncTarget}`;

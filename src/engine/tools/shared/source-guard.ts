@@ -50,9 +50,11 @@ function isBlockedGithubTool(toolId: string): boolean {
   return BLOCKED_GITHUB_TOOLS.has(toolId) || /^github_[a-z0-9_]+$/i.test(toolId) || /^github[A-Z]/.test(toolId);
 }
 
-const S3_CREATE_PROJECT_TOOLS = new Set([
+const SOURCE_GUARDED_PROJECT_TOOLS = new Set([
   'create_project',
   'createProject',
+  'quick_deploy',
+  'quickDeploy',
 ]);
 
 type RequestContext = { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void };
@@ -93,24 +95,24 @@ function workspaceBackedSource(reqCtx: RequestContext | undefined): WorkspaceBac
   return undefined;
 }
 
-function isWorkspaceBackedSource(reqCtx: RequestContext | undefined): boolean {
-  return workspaceBackedSource(reqCtx) !== undefined;
-}
+function stampSourceFields(
+  input: Record<string, unknown>,
+  wsSource: WorkspaceBackedSource,
+  reqCtx: RequestContext | undefined,
+): void {
+  const importedUrl = reqCtx?.get?.('importedRepoUrl') as string | undefined;
+  const usePublicGit = wsSource === 'git_url' && !!importedUrl;
 
-function syncTarget(reqCtx: RequestContext | undefined): string {
-  return (reqCtx?.get?.('syncTarget') as string)
-    ?? (reqCtx?.get?.('contextApplicationId') as string)
-    ?? 'unknown';
-}
+  const source = usePublicGit ? 'public_git' : 's3';
+  const repository = usePublicGit ? importedUrl : '0';
 
-function stampS3Fields(input: Record<string, unknown>): void {
-  input.source = 's3';
-  input.repository = '0';
+  input.source = source;
+  input.repository = repository;
 
   if (!input.body || typeof input.body !== 'object') return;
   const body = input.body as Record<string, unknown>;
-  body.source = 's3';
-  body.repository = '0';
+  body.source = source;
+  body.repository = repository;
 }
 
 async function handlePostCreate(
@@ -172,14 +174,14 @@ function wrapExecute(toolId: string, origExecute: ExecuteFn): ExecuteFn | null {
     };
   }
 
-  if (!S3_CREATE_PROJECT_TOOLS.has(toolId)) return null;
+  if (!SOURCE_GUARDED_PROJECT_TOOLS.has(toolId)) return null;
 
   return async (input, ctx) => {
     const reqCtx = getReqCtx(ctx);
-    const workspaceBacked = isWorkspaceBackedSource(reqCtx);
-    if (workspaceBacked) stampS3Fields(input as Record<string, unknown>);
+    const wsSource = workspaceBackedSource(reqCtx);
+    if (wsSource) stampSourceFields(input as Record<string, unknown>, wsSource, reqCtx);
     const resultData = await origExecute(input, ctx);
-    if (workspaceBacked) await handlePostCreate(resultData, ctx, reqCtx);
+    if (wsSource) await handlePostCreate(resultData, ctx, reqCtx);
     return resultData;
   };
 }
