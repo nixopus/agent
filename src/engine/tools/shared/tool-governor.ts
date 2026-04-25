@@ -8,11 +8,18 @@ export interface GovernorPolicy {
   limits?: Record<string, number>;
   readOnlyTools?: Set<string>;
   readOnlyLimit?: number;
+  /** Cache entries older than this are stale and re-fetched. Default: no expiry. */
+  cacheTtlMs?: number;
+}
+
+interface CacheEntry {
+  result: unknown;
+  ts: number;
 }
 
 interface ToolCallRecord {
   count: number;
-  cache: Map<string, unknown>;
+  cache: Map<string, CacheEntry>;
 }
 
 interface GovernorState {
@@ -82,13 +89,15 @@ function wrapExecute(toolId: string, origExecute: ExecuteFn, policy: GovernorPol
     const hash = stableHash(input);
     const forceRefresh = input?.force === true;
 
-    if (!forceRefresh && record.cache.has(hash)) {
+    const ttl = policy.cacheTtlMs ?? Infinity;
+    const cached = record.cache.get(hash);
+    if (!forceRefresh && cached && (Date.now() - cached.ts) < ttl) {
       logger.info({ toolId, count: record.count }, 'returning cached result (dedup)');
-      const cached = record.cache.get(hash);
-      if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
-        return { _cached: true, _note: 'Same call returned cached result.', ...(cached as Record<string, unknown>) };
+      const val = cached.result;
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        return { _cached: true, _note: 'Same call returned cached result.', ...(val as Record<string, unknown>) };
       }
-      return cached;
+      return val;
     }
 
     const limit = getLimitForTool(toolId, policy);
@@ -99,7 +108,7 @@ function wrapExecute(toolId: string, origExecute: ExecuteFn, policy: GovernorPol
 
     record.count++;
     const result = await origExecute(...args);
-    record.cache.set(hash, result);
+    record.cache.set(hash, { result, ts: Date.now() });
     return result;
   };
 }

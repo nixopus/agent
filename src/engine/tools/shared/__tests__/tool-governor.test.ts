@@ -188,6 +188,41 @@ describe('withToolGovernor', () => {
     expect(tool.execute).toHaveBeenCalledTimes(2);
   });
 
+  it('expires cache entries after cacheTtlMs', async () => {
+    const policy: GovernorPolicy = { defaultLimit: 10, cacheTtlMs: 50 };
+    let callCount = 0;
+    const tool = makeTool('pollStatus', async (input: unknown) => ({ data: `call-${++callCount}`, input }));
+    const wrapped = withToolGovernor({ tool: tool as never }, policy);
+    const ctx = { requestContext: makeRequestContext() };
+    const exec = (wrapped.tool as { execute: Function }).execute.bind(wrapped.tool);
+
+    const first = await exec({ id: 'abc' }, ctx);
+    expect(first).toEqual({ data: 'call-1', input: { id: 'abc' } });
+
+    const cachedWithinTtl = await exec({ id: 'abc' }, ctx);
+    expect(cachedWithinTtl).toEqual(expect.objectContaining({ _cached: true }));
+
+    await new Promise((r) => setTimeout(r, 60));
+
+    const afterExpiry = await exec({ id: 'abc' }, ctx);
+    expect(afterExpiry).toEqual({ data: 'call-2', input: { id: 'abc' } });
+    expect(callCount).toBe(2);
+  });
+
+  it('never expires cache when cacheTtlMs is not set', async () => {
+    const policy: GovernorPolicy = { defaultLimit: 10 };
+    const tool = makeTool('getApps');
+    const wrapped = withToolGovernor({ tool: tool as never }, policy);
+    const ctx = { requestContext: makeRequestContext() };
+    const exec = (wrapped.tool as { execute: Function }).execute.bind(wrapped.tool);
+
+    await exec({ page: 1 }, ctx);
+    const second = await exec({ page: 1 }, ctx);
+
+    expect(tool.execute).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(expect.objectContaining({ _cached: true }));
+  });
+
   it('falls back to tool key name when tool has no id', async () => {
     const tool = { execute: vi.fn(async () => ({ ok: true })) };
     const wrapped = withToolGovernor({ myKey: tool as never }, DEFAULT_POLICY);

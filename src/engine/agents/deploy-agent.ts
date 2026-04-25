@@ -48,6 +48,7 @@ const toolBudgetProcessor = new ToolBudgetProcessor(100);
 const DEPLOY_GOVERNOR_POLICY: GovernorPolicy = {
   defaultLimit: 5,
   readOnlyLimit: 8,
+  cacheTtlMs: 15_000,
   readOnlyTools: new Set([
     'resolveContext',
     'search_tools', 'load_tool',

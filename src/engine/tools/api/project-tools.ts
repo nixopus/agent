@@ -19,6 +19,27 @@ import { createLogger } from '../../../logger';
 
 const logger = createLogger('project-tools');
 
+function validateRepository(inner: Record<string, unknown>): string | null {
+  const repo = inner.repository;
+  if (repo == null || repo === '' || repo === '0') return null;
+  const repoStr = String(repo);
+  if (/^\d+$/.test(repoStr)) return null;
+  if (/^https?:\/\//.test(repoStr)) return null;
+  if (repoStr.includes('/')) {
+    return (
+      `repository "${repoStr}" looks like an owner/name slug. ` +
+      'The API requires a numeric GitHub repo ID (e.g. "1203828551"). ' +
+      'Call get_github_repositories to find the numeric ID, or use load_remote_repository ' +
+      'for public repos not in your connected GitHub account — do NOT pass repository when ' +
+      'deploying via load_remote_repository, it is set automatically.'
+    );
+  }
+  return (
+    `repository "${repoStr}" is not a valid numeric GitHub repo ID. ` +
+    'Call get_github_repositories to find the correct ID.'
+  );
+}
+
 const tools = defineToolGroup({
   createProject: {
     id: 'create_project',
@@ -35,6 +56,8 @@ const tools = defineToolGroup({
       if (coerced.repository != null) coerced.repository = String(coerced.repository);
       const body = coerced.body ?? coerced;
       const inner = (typeof body === 'object' && body !== null ? body : coerced) as Record<string, unknown>;
+      const repoErr = validateRepository(inner);
+      if (repoErr) return { error: repoErr };
       if (Array.isArray(inner.compose_services) && inner.compose_services.length > 0) {
         if (!inner.build_pack) inner.build_pack = 'docker-compose';
         if (!inner.dockerfile_path || inner.dockerfile_path === 'Dockerfile') {
@@ -111,6 +134,8 @@ export const quickDeployTool = createTool({
     if (coerced.repository != null) coerced.repository = String(coerced.repository);
     const body = coerced.body ?? coerced;
     const inner = (typeof body === 'object' && body !== null ? body : coerced) as Record<string, unknown>;
+    const repoErr = validateRepository(inner);
+    if (repoErr) return { error: repoErr };
 
     if (Array.isArray(inner.compose_services) && inner.compose_services.length > 0) {
       if (!inner.build_pack) inner.build_pack = 'docker-compose';
@@ -159,15 +184,20 @@ export const quickDeployTool = createTool({
     } as unknown as Parameters<typeof deployProject>[0]);
 
     const deployData = (deployResult as any)?.data?.data ?? (deployResult as any)?.data ?? deployResult;
-    const deploymentId = deployData?.id ?? deployData?.deployment_id;
+    const candidateId = deployData?.deployment_id
+      ?? deployData?.deployments?.[0]?.id
+      ?? deployData?.id;
+    const deploymentId = candidateId !== applicationId ? candidateId : undefined;
 
     return {
       applicationId,
       applicationName: appData?.name ?? inner.name,
-      deploymentId,
+      ...(deploymentId ? { deploymentId } : {}),
       domain: assignedDomain,
       status: deployData?.status ?? 'queued',
-      message: 'Project created and deployment started. Poll getDeploymentById for status.',
+      message: deploymentId
+        ? 'Project created and deployment started. Poll get_deployment_by_id for status.'
+        : 'Project created and deploy triggered. Call get_application_deployments({ id }) to get the deployment ID, then poll get_deployment_by_id.',
     };
   },
 });
