@@ -121,19 +121,20 @@ describe('withSourceGuard', () => {
     expect(githubTool.execute).not.toHaveBeenCalled();
   });
 
-  it('stamps create_project payload and remaps workspace prefix for git_url workspace', async () => {
+  it('stamps create_project with public_git + real URL for git_url workspace with importedRepoUrl', async () => {
     const syncTarget = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
     const workspaceId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
     const newAppId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    const repoUrl = 'https://github.com/nixopus/sample-app.git';
 
     const createProjectTool = {
       id: 'create_project',
       execute: vi.fn(async (input: Record<string, unknown>) => {
-        expect(input.source).toBe('s3');
-        expect(input.repository).toBe('0');
+        expect(input.source).toBe('public_git');
+        expect(input.repository).toBe(repoUrl);
         const body = input.body as Record<string, unknown>;
-        expect(body.source).toBe('s3');
-        expect(body.repository).toBe('0');
+        expect(body.source).toBe('public_git');
+        expect(body.repository).toBe(repoUrl);
         expect(body.other).toBe(1);
         return { id: newAppId };
       }),
@@ -153,10 +154,112 @@ describe('withSourceGuard', () => {
         syncTarget,
         workspaceId,
         contextBranch: 'main',
+        importedRepoUrl: repoUrl,
       }),
     });
 
     expect(createProjectTool.execute).toHaveBeenCalledTimes(1);
     expect(remapPrefix).toHaveBeenCalledWith(syncTarget, newAppId);
+  });
+
+  it('falls back to s3 stamping for git_url workspace without importedRepoUrl', async () => {
+    const syncTarget = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const newAppId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+    const createProjectTool = {
+      id: 'create_project',
+      execute: vi.fn(async (input: Record<string, unknown>) => {
+        expect(input.source).toBe('s3');
+        expect(input.repository).toBe('0');
+        return { id: newAppId };
+      }),
+    };
+
+    const wrapped = withSourceGuard({ createProjectTool: createProjectTool as never });
+    const input: Record<string, unknown> = {
+      name: 'Test',
+      source: 'github',
+      repository: '99',
+      body: { source: 'github', repository: '99', other: 1 },
+    };
+
+    await (wrapped.createProjectTool as { execute: Function }).execute(input, {
+      requestContext: makeRequestContext({
+        workspaceSource: 'git_url',
+        syncTarget,
+        workspaceId: syncTarget,
+        contextBranch: 'main',
+      }),
+    });
+
+    expect(createProjectTool.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('stamps s3 fields for s3 workspace source (unchanged behavior)', async () => {
+    const syncTarget = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const newAppId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+    const createProjectTool = {
+      id: 'create_project',
+      execute: vi.fn(async (input: Record<string, unknown>) => {
+        expect(input.source).toBe('s3');
+        expect(input.repository).toBe('0');
+        return { id: newAppId };
+      }),
+    };
+
+    const wrapped = withSourceGuard({ createProjectTool: createProjectTool as never });
+    const input: Record<string, unknown> = {
+      name: 'Test',
+      source: 'github',
+      repository: '99',
+      body: { source: 'github', repository: '99', other: 1 },
+    };
+
+    await (wrapped.createProjectTool as { execute: Function }).execute(input, {
+      requestContext: makeRequestContext({
+        workspaceSource: 's3',
+        syncTarget,
+        workspaceId: syncTarget,
+        contextBranch: 'main',
+      }),
+    });
+
+    expect(createProjectTool.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('guards quick_deploy the same as create_project', async () => {
+    const syncTarget = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    const repoUrl = 'https://github.com/nixopus/sample-app.git';
+    const newAppId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+    const quickDeployTool = {
+      id: 'quick_deploy',
+      execute: vi.fn(async (input: Record<string, unknown>) => {
+        expect(input.source).toBe('public_git');
+        expect(input.repository).toBe(repoUrl);
+        return { id: newAppId };
+      }),
+    };
+
+    const wrapped = withSourceGuard({ quickDeployTool: quickDeployTool as never });
+    const input: Record<string, unknown> = {
+      name: 'Test',
+      source: 'github',
+      repository: '99',
+      body: { source: 'github', repository: '99' },
+    };
+
+    await (wrapped.quickDeployTool as { execute: Function }).execute(input, {
+      requestContext: makeRequestContext({
+        workspaceSource: 'git_url',
+        syncTarget,
+        workspaceId: syncTarget,
+        contextBranch: 'main',
+        importedRepoUrl: repoUrl,
+      }),
+    });
+
+    expect(quickDeployTool.execute).toHaveBeenCalledTimes(1);
   });
 });
