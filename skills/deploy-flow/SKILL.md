@@ -47,7 +47,7 @@ A [deploy-patterns] block may be injected with known fixes, pitfalls, and fast p
 
 3. If hints.isMonorepo is true: read_skill("monorepo-strategy") for service discovery, dependency ordering, and build context strategy.
 
-4. If hints.hasDockerfile is false: load read_skill("dockerfile-generation") and the matching ecosystem skill (e.g. read_skill("node-deploy")). Also read_skill("dockerignore-generation") if hints.hasDockerignore is false. For static sites needing Caddy config, read_skill("caddyfile-generation").
+4. If hints.hasDockerfile is false: read_skill("dockerfile-generation") and the matching ecosystem skill (e.g. read_skill("node-deploy")). Also read_skill("dockerignore-generation") if hints.hasDockerignore is false. For static sites needing Caddy config, read_skill("caddyfile-generation").
    - **Workspace-backed sources** (`source=s3` after `load_local_workspace`, **or** codebase loaded via **`load_remote_repository`** from a public HTTPS git URL): Use **`write_workspace_files`** to save generated Dockerfile/.dockerignore/etc.
    - **GitHub connector flow** (standard GitHub flow): Do **not** use `write_workspace_files`. Use the GitHub tools directly: read_skill("github-workflow") and follow the Fix-via-PR flow (create branch → github_create_or_update_file on that branch → open PR). NEVER push directly to main/master.
 

@@ -164,7 +164,17 @@ metadata:
 ---
 ```
 
-### 3. Reference from agent instructions
+### 3. Write clear, unambiguous instructions
+
+Skills are read by LLMs that have access to both **skill tools** (`skill`, `skill_read`, `skill_search`) and **runtime tools** (`search_tools`, `load_tool`, and the actual tools). Models can confuse these two systems. Follow these rules:
+
+- **If the skill references runtime tools** (any tool loaded via `search_tools`/`load_tool`), add a disambiguation line near the top: `**These are runtime tools. Use search_tools / load_tool — do NOT use skill_read or skill_search.**`
+- **Never embed file paths that look like skill sub-files** unless those files actually exist in the skill directory. Paths like `getting-started/quickstart.md` will be misinterpreted as `skill_read("my-skill", "getting-started/quickstart.md")`.
+- **Use backticked tool names** consistently so the model can distinguish tool calls from prose.
+- **Spell out the full tool discovery chain** when referencing searchable tools: `search_tools("keyword")` → `load_tool("tool_name")` → `tool_name({ args })`.
+- **For external data (docs, APIs)**, either embed the data directly in the skill or make it clear the data comes from an HTTP tool, not a skill file.
+
+### 4. Reference from agent instructions
 
 In the agent's `instructions` string, add a skill reference:
 
