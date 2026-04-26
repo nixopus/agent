@@ -95,9 +95,9 @@ describe('DeployFlowInjector', () => {
     expect(result.systemMessages).toBeDefined();
     expect(result.systemMessages!.length).toBeGreaterThan(0);
 
-    const injected = result.systemMessages![result.systemMessages!.length - 1];
+    const injected = result.systemMessages![0];
     expect(injected.content).toContain('[sample-app-fast-path]');
-    expect(injected.content).toContain('quick_deploy');
+    expect(injected.content).toContain('quickDeploy');
     expect(injected.content).toContain('port: 3000');
   });
 
@@ -106,7 +106,7 @@ describe('DeployFlowInjector', () => {
     const args = makeArgs(`deploy ${url}`);
     const result = injector.processInputStep(args);
 
-    const injected = result.systemMessages![result.systemMessages!.length - 1];
+    const injected = result.systemMessages![0];
     expect(injected.content).toContain(url);
   });
 
@@ -115,7 +115,7 @@ describe('DeployFlowInjector', () => {
     const result = injector.processInputStep(args);
 
     if (result.systemMessages && result.systemMessages.length > 0) {
-      const injected = result.systemMessages[result.systemMessages.length - 1];
+      const injected = result.systemMessages[0];
       expect(injected.content).toContain('[deploy-flow]');
       expect(injected.content).not.toMatch(/^\[sample-app-fast-path\]/);
     }
@@ -147,9 +147,9 @@ describe('DeployFlowInjector', () => {
     const args = makeArgs('deploy https://github.com/nixopus/sample-app');
     const result = injector.processInputStep(args);
 
-    const injected = result.systemMessages![result.systemMessages!.length - 1];
-    expect(injected.content).toContain('Do NOT');
-    expect(injected.content).toContain('Load any skills');
+    const injected = result.systemMessages![0];
+    expect(injected.content).toContain('HIGHEST PRIORITY');
+    expect(injected.content).toContain('FORBIDDEN tools');
   });
 });
 

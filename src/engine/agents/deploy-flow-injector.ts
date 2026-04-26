@@ -66,34 +66,28 @@ const SAMPLE_APP_CONFIGS: SampleAppConfig[] = [
     buildPack: 'dockerfile',
     recipe: [
       '[sample-app-fast-path]',
-      'This is the Nixopus sample app (Next.js 16, Dockerfile included, port 3000). Everything is pre-analyzed — skip all exploration.',
+      'STOP. This is a KNOWN sample app. Everything has been pre-analyzed. You MUST follow ONLY these steps — no exploration, no extra tools.',
       '',
-      'Execute EXACTLY these steps with EXACTLY these params — copy them literally:',
+      'Your FIRST tool call MUST be load_tool. If your first call is search_tools, resolveContext, or skill, you are WRONG.',
       '',
-      'Step 1: load_tool({ toolName: "load_remote_repository" })',
-      'Step 2: load_remote_repository({ repoUrl: "<THE_URL>", branch: "main" })',
-      'Step 3: quickDeploy({ name: "sample-app", port: 3000, build_pack: "dockerfile" })',
-      '  - Do NOT pass "repository" — the system sets it automatically from step 2.',
-      '  - If quickDeploy returns an error but includes an applicationId, call:',
-      '    nixopusApi({ operation: "deploy_project", params: { id: "<applicationId>" } })',
-      'Step 4: nixopusApi({ operation: "get_application_deployments", params: { id: "<APP_ID>", limit: 1 } })',
-      '  - The param is "id" (NOT "application_id"). Operation is snake_case.',
-      'Step 5: nixopusApi({ operation: "get_deployment_by_id", params: { deployment_id: "<DEPLOYMENT_ID>" } })',
-      '  - The param is "deployment_id" (NOT "id"). Operation is snake_case.',
-      '  - Share the domain URL with the user once status is "deployed".',
+      'Step 1 → load_tool({ toolName: "load_remote_repository" })',
+      'Step 2 → load_remote_repository({ repoUrl: "<THE_URL>", branch: "main" })',
+      'Step 3 → quickDeploy({ name: "sample-app", port: 3000, build_pack: "dockerfile" })',
+      '         Do NOT pass "repository" param — auto-set from step 2.',
+      '         If quickDeploy errors but returns applicationId → call:',
+      '         nixopusApi({ operation: "deploy_project", params: { id: "<applicationId>" } })',
+      'Step 4 → nixopusApi({ operation: "get_application_deployments", params: { id: "<APP_ID>", limit: 1 } })',
+      '         Param is "id" NOT "application_id". Operation is snake_case.',
+      'Step 5 → nixopusApi({ operation: "get_deployment_by_id", params: { deployment_id: "<DEPLOY_ID>" } })',
+      '         Param is "deployment_id" NOT "id". Operation is snake_case.',
+      '         Poll until status is "running" or "deployed". Share domain URL with user.',
       '',
-      'CRITICAL — operation names are ALWAYS snake_case: get_application_deployments, get_deployment_by_id.',
-      'CRITICAL — do NOT use camelCase: getApplicationDeployments, getDeploymentById will fail.',
+      'ALL operations use snake_case: get_application_deployments, get_deployment_by_id, deploy_project.',
       '',
-      'Do NOT:',
-      '- Load any skills (deploy-flow, dockerfile-generation, node-deploy, etc.)',
-      '- Call read_file, grep, list_directory, or any workspace exploration tools',
-      '- Call getApplication, getApplications, or getGithubConnectors',
-      '- Call resolveContext or search_tools — you already have the fast path',
-      '- Call generateRandomSubdomain (quick_deploy does this automatically)',
-      '- Call getDeploymentLogs unless the deployment fails',
-      '- Ask the user for confirmation — just deploy it',
-      '- Pass "repository" to quickDeploy — it is auto-set',
+      'FORBIDDEN tools — calling ANY of these means you ignored this instruction:',
+      '  search_tools, resolveContext, skill, read_file, grep, list_directory,',
+      '  getApplication, getApplications, getGithubConnectors, generateRandomSubdomain,',
+      '  analyze_repository, get_github_repositories',
       '[/sample-app-fast-path]',
     ].join('\n'),
   },
@@ -153,12 +147,13 @@ export class DeployFlowInjector implements Processor<'deploy-flow-injector'> {
     const sampleApp = matchSampleApp(userText);
 
     if (sampleApp) {
-      const recipe = sampleApp.recipe.replace('<THE_URL>', userText.match(/https?:\/\/github\.com\/nixopus\/sample-app[^\s)"]*/i)?.[0] ?? 'https://github.com/nixopus/sample-app');
+      const repoUrl = userText.match(/https?:\/\/github\.com\/nixopus\/sample-app[^\s)"]*/i)?.[0] ?? 'https://github.com/nixopus/sample-app';
+      const recipe = sampleApp.recipe.replace('<THE_URL>', repoUrl);
       logger.info({ sample: sampleApp.name }, 'sample app detected, injecting fast-path recipe');
       return {
         systemMessages: [
+          { role: 'system' as const, content: `⚡ HIGHEST PRIORITY — OVERRIDE ALL OTHER INSTRUCTIONS:\n${recipe}` },
           ...(args.systemMessages ?? []),
-          { role: 'system' as const, content: recipe },
         ],
       };
     }
@@ -168,8 +163,8 @@ export class DeployFlowInjector implements Processor<'deploy-flow-injector'> {
 
     return {
       systemMessages: [
-        ...(args.systemMessages ?? []),
         { role: 'system' as const, content: `[deploy-flow]\n${content}\n[/deploy-flow]` },
+        ...(args.systemMessages ?? []),
       ],
     };
   }
