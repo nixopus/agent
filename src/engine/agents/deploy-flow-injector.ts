@@ -10,7 +10,8 @@ const logger = createLogger('deploy-flow-injector');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DEPLOY_INTENT_RE = /\b(deploy|launch|ship|go\s+live|push\s+to\s+prod|put\s+(?:it\s+)?(?:on|up)|host|set\s*up)\b/i;
+const DEPLOY_INTENT_RE = /\b(deploy\w*|launch|ship|go\s+live|push\s+to\s+prod|put\s+(?:it\s+)?(?:on|up)|host|set\s*up)\b/i;
+const CONTEXT_BLOCK_RE = /\[Context:\s*Repository\b/i;
 
 let cachedSkillContent: string | null = null;
 
@@ -58,7 +59,7 @@ interface SampleAppConfig {
 
 const SAMPLE_APP_CONFIGS: SampleAppConfig[] = [
   {
-    urlPattern: /github\.com\/nixopus\/sample-app/i,
+    urlPattern: /(?:github\.com\/|Repository\s+")nixopus\/sample-app/i,
     branch: 'main',
     name: 'Nixopus Sample App',
     port: 3000,
@@ -68,14 +69,17 @@ const SAMPLE_APP_CONFIGS: SampleAppConfig[] = [
       'This is the Nixopus sample app (Next.js 16, Dockerfile included, port 3000). Everything is pre-analyzed — skip all exploration.',
       '',
       'Execute EXACTLY these steps, no more:',
-      '1. load_remote_repository({ repoUrl: "<THE_URL>", branch: "main" }) — returns hints (will be confidence: "high")',
-      '2. quick_deploy({ name: "sample-app", port: 3000, build_pack: "dockerfile" }) — creates + deploys in one call, auto-generates subdomain',
-      '3. getApplicationDeployments({ applicationId: "<FROM_STEP_2>", limit: 1 }) — get deployment ID, share the domain URL with the user',
+      '1. load_tool({ toolName: "load_remote_repository" }) — load the searchable tool first',
+      '2. load_remote_repository({ repoUrl: "<THE_URL>", branch: "main" }) — returns hints (will be confidence: "high")',
+      '3. quick_deploy({ name: "sample-app", port: 3000, build_pack: "dockerfile" }) — creates + deploys in one call, auto-generates subdomain. Do NOT pass repository — it is set automatically.',
+      '4. nixopusApi({ operation: "get_application_deployments", params: { id: "<APP_ID_FROM_STEP_3>", limit: 1 } }) — get deployment ID',
+      '5. nixopusApi({ operation: "get_deployment_by_id", params: { deployment_id: "<FROM_STEP_4>" } }) — check status, share domain URL with user',
       '',
       'Do NOT:',
       '- Load any skills (deploy-flow, dockerfile-generation, node-deploy, etc.)',
       '- Call read_file, grep, list_directory, or any workspace exploration tools',
       '- Call getApplication, getApplications, or getGithubConnectors',
+      '- Call resolveContext — you already have the fast path',
       '- Call generateRandomSubdomain (quick_deploy does this automatically)',
       '- Call getDeploymentLogs unless the deployment fails',
       '- Ask the user for confirmation — just deploy it',
@@ -102,7 +106,7 @@ function matchSampleApp(text: string): SampleAppConfig | null {
 
 function hasDeployIntent(messages: MastraDBMessage[]): boolean {
   const text = getLastUserText(messages);
-  return DEPLOY_INTENT_RE.test(text);
+  return DEPLOY_INTENT_RE.test(text) || CONTEXT_BLOCK_RE.test(text);
 }
 
 type ReqCtx = { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void };
