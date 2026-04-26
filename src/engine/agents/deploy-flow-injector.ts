@@ -92,7 +92,18 @@ function getLastUserText(messages: MastraDBMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg?.role !== 'user') continue;
-    return typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content ?? '');
+    if (typeof msg.content === 'string') return msg.content;
+    if (msg.content && typeof msg.content === 'object') {
+      const c = msg.content as Record<string, unknown>;
+      if (typeof c.content === 'string') return c.content;
+      if (Array.isArray(c.parts)) {
+        return c.parts
+          .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+          .map((p: any) => p.text)
+          .join('\n');
+      }
+    }
+    return JSON.stringify(msg.content ?? '');
   }
   return '';
 }
